@@ -23,9 +23,9 @@ Two small pieces, no daemon, no portal round trip:
 | Move | drag with left mouse button |
 | Zoom | mouse wheel (10 % steps), `Ctrl+0` resets |
 | Opacity | `Ctrl` + wheel, `Ctrl+1` resets |
-| Copy image | `Ctrl+C` or right-click menu |
+| Copy image and close | `Ctrl+C`, double-click, or right-click menu |
 | Save to screenshot folder | `Ctrl+S` or right-click menu |
-| Close | `Esc` or double-click |
+| Close without copying | `Esc` |
 
 ## Requirements
 

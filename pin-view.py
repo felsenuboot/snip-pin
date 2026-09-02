@@ -5,10 +5,12 @@ usage: pin-view.py IMAGE [X Y]
 
   drag           move            wheel             zoom (10% steps)
   Ctrl+wheel     opacity         Ctrl+0 / 1        reset zoom / opacity
-  Ctrl+C         copy image      Ctrl+S            save to screenshot folder
-  right-click    menu            Esc / dbl-click   close
+  Ctrl+C         copy image & close        Ctrl+S    save to screenshot folder
+  dbl-click      copy image & close        Esc       close without copying
+  right-click    menu
 """
-import os, subprocess, sys, time, json, datetime, shutil
+import os, subprocess, sys, time, json, datetime, shutil, warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Gdk", "4.0")
@@ -101,19 +103,34 @@ class Pin(Gtk.ApplicationWindow):
             return
         x, y = self.pos
         deadline = time.time() + 2
-        def tick():
+        state = {"addr": None, "ok": 0}
+
+        def me():
             try:
-                clients = json.loads(subprocess.run(["hyprctl", "clients", "-j"], capture_output=True, text=True).stdout)
+                clients = json.loads(subprocess.run(["hyprctl", "clients", "-j"],
+                                                    capture_output=True, text=True).stdout)
             except Exception:
-                return time.time() < deadline
+                return None
             for c in clients:
                 if c.get("pid") == os.getpid():
-                    subprocess.run(["hyprctl", "dispatch",
-                        f"hl.dsp.window.move({{ x = {x}, y = {y}, exact = true, window = 'address:{c['address']}' }})"],
-                        capture_output=True)
-                    return False
+                    return c
+            return None
+
+        def tick():
+            c = me()
+            if c is None:
+                return time.time() < deadline
+            if list(c["at"]) == [x, y]:
+                # Hyprland re-centres a floating window when its size settles after
+                # mapping, so keep checking briefly and re-move if it drifted
+                state["ok"] += 1
+                return state["ok"] < 6 and time.time() < deadline
+            state["ok"] = 0
+            subprocess.run(["hyprctl", "dispatch",
+                f"hl.dsp.window.move({{ x = {x}, y = {y}, exact = true, window = 'address:{c['address']}' }})"],
+                capture_output=True)
             return time.time() < deadline
-        GLib.timeout_add(15, tick)
+        GLib.timeout_add(30, tick)
 
     # ---- input ------------------------------------------------------------
     def on_drag_begin(self, gesture, x, y):
@@ -123,7 +140,7 @@ class Pin(Gtk.ApplicationWindow):
 
     def on_click(self, gesture, n, x, y):
         if n == 2:
-            self.close()
+            self.copy()
 
     def on_rclick(self, gesture, n, x, y):
         self.menu.set_pointing_to(Gdk.Rectangle(x=int(x), y=int(y), width=1, height=1))
@@ -155,16 +172,18 @@ class Pin(Gtk.ApplicationWindow):
     # ---- actions ----------------------------------------------------------
     def build_menu(self):
         m = Gio.Menu()
-        m.append("Copy image\tCtrl+C", "win.copy")
+        m.append("Copy image & close\tCtrl+C", "win.copy")
         m.append("Save to screenshots\tCtrl+S", "win.save")
         m.append("Reset zoom\tCtrl+0", "win.reset")
         m.append("Close\tEsc", "win.close")
         return m
 
     def copy(self, *a):
+        # wl-copy forks a helper that keeps serving the clipboard after we exit
         with open(self.path, "rb") as f:
             subprocess.run(["wl-copy", "--type", "image/png"], stdin=f)
         self.notify_user("Copied to clipboard")
+        self.close()
 
     def save(self, *a):
         folder = screenshot_folder()
