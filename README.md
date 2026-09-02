@@ -45,7 +45,7 @@ replace it in `pin-view.py` with `movewindowpixel exact X Y,address:...`.
 ## Install
 
 ```
-git clone https://github.com/felsenuboot/snip-pin ~/code/snip-pin
+git clone https://github.com/felsenuboot/snip-pin ~/.local/share/snip-pin
 ```
 
 Bind the script to a key and add a window rule so pins float above everything
@@ -54,7 +54,7 @@ without animations, blur, shadows or rounded corners.
 Hyprland Lua config (0.56+):
 
 ```lua
-hl.bind("PRINT", hl.dsp.exec_cmd("~/code/snip-pin/snip-pin.sh"), { description = "Snip a region and pin it" })
+hl.bind("PRINT", hl.dsp.exec_cmd("~/.local/share/snip-pin/snip-pin.sh"), { description = "Snip a region and pin it" })
 
 hl.window_rule({
     name = "snip-pin",
@@ -72,7 +72,7 @@ hl.window_rule({
 Classic `hyprland.conf`:
 
 ```
-bind = , PRINT, exec, ~/code/snip-pin/snip-pin.sh
+bind = , PRINT, exec, ~/.local/share/snip-pin/snip-pin.sh
 
 windowrulev2 = float, class:^(snip-pin)$
 windowrulev2 = pin, class:^(snip-pin)$
