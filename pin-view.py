@@ -63,9 +63,13 @@ class Pin(Gtk.ApplicationWindow):
         self.set_child(self.area)
         self.apply_scale()
 
+        # Start the compositor move only after the pointer really moved: handing
+        # the pointer to Hyprland on the first press would swallow double-clicks.
         drag = Gtk.GestureDrag(button=1)
-        drag.connect("drag-begin", self.on_drag_begin)
+        drag.connect("drag-begin", lambda g, x, y: setattr(self, "moving", False))
+        drag.connect("drag-update", self.on_drag_update)
         self.area.add_controller(drag)
+        self.moving = False
 
         click = Gtk.GestureClick(button=1)
         click.connect("pressed", self.on_click)
@@ -147,10 +151,14 @@ class Pin(Gtk.ApplicationWindow):
         GLib.timeout_add(30, tick)
 
     # ---- input ------------------------------------------------------------
-    def on_drag_begin(self, gesture, x, y):
+    def on_drag_update(self, gesture, dx, dy):
+        if self.moving or (abs(dx) < 4 and abs(dy) < 4):
+            return
+        self.moving = True
+        ok, sx, sy = gesture.get_start_point()
         surface = self.get_surface()
         if isinstance(surface, Gdk.Toplevel):
-            surface.begin_move(gesture.get_device(), 1, x, y, gesture.get_current_event_time())
+            surface.begin_move(gesture.get_device(), 1, sx + dx, sy + dy, gesture.get_current_event_time())
 
     def on_click(self, gesture, n, x, y):
         if n == 2:
