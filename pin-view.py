@@ -20,6 +20,15 @@ from gi.repository import Gtk, Gdk, GdkPixbuf, GLib, Gio
 APP_ID = "snip-pin"
 ZOOM_STEP = 1.10
 MIN_PX = 40
+BORDER = 2                                         # px, drawn by the viewer itself
+BORDER_COLOR = os.environ.get("SNIP_PIN_BORDER", "#ff9f1c")
+CSS = f"""
+window.snip-pin {{
+    background: transparent;
+    border: {BORDER}px solid {BORDER_COLOR};
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.45);   /* dark inner line for light pages */
+}}
+"""
 
 def screenshot_folder():
     p = os.path.expanduser("~/.config/ml4w/settings/screenshot-folder")
@@ -43,6 +52,11 @@ class Pin(Gtk.ApplicationWindow):
         self.opacity = 1.0
         self.set_decorated(False)
         self.set_resizable(False)
+        self.add_css_class("snip-pin")
+        css = Gtk.CssProvider()
+        css.load_from_string(CSS)
+        Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), css,
+                                                  Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 
         self.area = Gtk.DrawingArea()
         self.area.set_draw_func(self.draw)
@@ -101,7 +115,7 @@ class Pin(Gtk.ApplicationWindow):
     def place(self):
         if self.pos is None:
             return
-        x, y = self.pos
+        x, y = self.pos[0] - BORDER, self.pos[1] - BORDER   # keep the image itself at pos
         deadline = time.time() + 2
         state = {"addr": None, "ok": 0}
 

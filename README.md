@@ -64,6 +64,7 @@ hl.window_rule({
     no_anim = true,
     no_blur = true,
     no_shadow = true,
+    border_size = 0,
     rounding = 0,
 })
 ```
@@ -78,8 +79,12 @@ windowrulev2 = pin, class:^(snip-pin)$
 windowrulev2 = noanim, class:^(snip-pin)$
 windowrulev2 = noblur, class:^(snip-pin)$
 windowrulev2 = noshadow, class:^(snip-pin)$
+windowrulev2 = noborder, class:^(snip-pin)$
 windowrulev2 = rounding 0, class:^(snip-pin)$
 ```
+
+The pin draws its own 2 px border (orange by default) so it stands out on
+static pages; set `SNIP_PIN_BORDER="#89b4fa"` in the environment to change it.
 
 The save target is read from `~/.config/ml4w/settings/screenshot-folder` if
 present (ML4W dotfiles), otherwise `~/Pictures`.
