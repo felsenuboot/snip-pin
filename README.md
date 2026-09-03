@@ -1,4 +1,4 @@
-# snip-pin
+# <img src="snip-pin.svg" width="40" align="top" alt=""> snip-pin
 
 [![CI](https://github.com/felsenuboot/snip-pin/actions/workflows/ci.yml/badge.svg)](https://github.com/felsenuboot/snip-pin/actions/workflows/ci.yml)
 
