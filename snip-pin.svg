@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffb35c"/>
+      <stop offset="1" stop-color="#f06a1c"/>
+    </linearGradient>
+    <linearGradient id="pin" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4a90e2"/>
+      <stop offset="1" stop-color="#1c5fb8"/>
+    </linearGradient>
+  </defs>
+  <!-- rounded tile -->
+  <rect x="8" y="8" width="112" height="112" rx="26" fill="url(#bg)"/>
+  <rect x="8" y="8" width="112" height="112" rx="26" fill="none" stroke="#000" stroke-opacity=".15" stroke-width="2"/>
+  <!-- snipped picture -->
+  <rect x="28" y="36" width="72" height="56" rx="6" fill="#fff" fill-opacity=".92"/>
+  <path d="M34 84 L54 62 L68 76 L78 66 L94 84 Z" fill="#8fc3ff"/>
+  <circle cx="80" cy="52" r="6" fill="#ffd21f"/>
+  <!-- selection corners -->
+  <g fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round">
+    <path d="M22 44 V30 H36"/>
+    <path d="M92 30 H106 V44"/>
+    <path d="M22 84 V98 H36"/>
+    <path d="M92 98 H106 V84"/>
+  </g>
+  <!-- pushpin -->
+  <g transform="translate(64 30) rotate(35)">
+    <path d="M-10 -20 H10 L7 -4 H-7 Z" fill="url(#pin)"/>
+    <rect x="-13" y="-24" width="26" height="6" rx="3" fill="#2f7fe5"/>
+    <path d="M-13 -4 H13 L9 6 H-9 Z" fill="#2f7fe5"/>
+    <path d="M0 6 L0 30" stroke="#3a3a3a" stroke-width="3" stroke-linecap="round"/>
+    <path d="M-13 -4 H13 L9 6 H-9 Z" fill="#000" fill-opacity=".12"/>
+  </g>
+</svg>

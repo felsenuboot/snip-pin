@@ -23,8 +23,8 @@ Two small pieces, no daemon, no portal round trip:
 | Move | drag with left mouse button |
 | Zoom | mouse wheel (10 % steps), `Ctrl+0` resets |
 | Opacity | `Ctrl` + wheel, `Ctrl+1` resets |
-| Copy image and close | `Ctrl+C`, double-click, or right-click menu |
-| Save to screenshot folder | `Ctrl+S` or right-click menu |
+| Copy image and close | `Ctrl+C`, double-click, or right-click |
+| Save to screenshot folder | `Ctrl+S` or middle-click menu |
 | Close without copying | `Esc` |
 | Annotate | toolbar under the pin (on hover), or tool keys |
 
@@ -33,7 +33,7 @@ Two small pieces, no daemon, no portal round trip:
 The pin is the editor: a toolbar appears under the pin while the pointer is
 over it. Pick a tool and draw
 with the left mouse button; with no tool selected the pin behaves exactly as
-before (drag moves it, double-click copies). Whatever is drawn is baked into
+before (drag moves it, double- or right-click copies). Whatever is drawn is baked into
 the image that `Ctrl+C` and `Ctrl+S` export. The original snip on disk stays
 untouched.
 
@@ -76,7 +76,11 @@ replace it in `pin-view.py` with `movewindowpixel exact X Y,address:...`.
 
 ```
 git clone https://github.com/felsenuboot/snip-pin ~/.local/share/snip-pin
+~/.local/share/snip-pin/install.sh
 ```
+
+`install.sh` puts a desktop entry and icon into `~/.local/share` so docks and
+taskbars show a proper icon for pins; it is optional and safe to rerun.
 
 Bind the script to a key and add a window rule so pins float above everything
 without animations, blur, shadows or rounded corners.

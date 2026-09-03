@@ -7,7 +7,7 @@ usage: pin-view.py IMAGE [X Y]
   Ctrl+wheel     opacity         Ctrl+0 / 1        reset zoom / opacity
   Ctrl+C         copy image & close        Ctrl+S    save to screenshot folder
   dbl-click      copy image & close        Esc       close without copying
-  right-click    menu
+  right-click    copy image & close        middle-click  menu
 
 Annotations (toolbar under the pin while the pointer hovers it, or keys):
   R rectangle   A arrow   P pen   T text   M marker   B blur (mosaic)
@@ -238,8 +238,12 @@ class Pin(Gtk.ApplicationWindow):
         self.area.add_controller(click)
 
         rclick = Gtk.GestureClick(button=3)
-        rclick.connect("pressed", self.on_rclick)
+        rclick.connect("pressed", lambda g, n, x, y: self.copy())
         self.area.add_controller(rclick)
+
+        mclick = Gtk.GestureClick(button=2)
+        mclick.connect("pressed", self.on_menu)
+        self.area.add_controller(mclick)
 
         scroll = Gtk.EventControllerScroll(flags=Gtk.EventControllerScrollFlags.VERTICAL)
         scroll.connect("scroll", self.on_scroll)
@@ -559,7 +563,7 @@ class Pin(Gtk.ApplicationWindow):
             self.sync_toolbar()
             self.area.queue_draw()
 
-    def on_rclick(self, gesture, n, x, y):
+    def on_menu(self, gesture, n, x, y):
         self.menu.set_pointing_to(Gdk.Rectangle(x=int(x), y=int(y), width=1, height=1))
         self.menu.popup()
 
@@ -674,6 +678,8 @@ def main():
         win.place()
     app.connect("activate", activate)
     GLib.set_prgname(APP_ID)   # -> Wayland app_id / Hyprland class "snip-pin"
+    # Docks look the icon up by app_id via snip-pin.desktop (see README).
+    Gtk.Window.set_default_icon_name(APP_ID)
     app.run([sys.argv[0]])
 
 if __name__ == "__main__":
