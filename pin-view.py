@@ -5,7 +5,7 @@ usage: pin-view.py IMAGE [X Y]
 
   drag           move            wheel             zoom (10% steps)
   Ctrl+wheel     opacity         Ctrl+0 / 1        reset zoom / opacity
-  Ctrl+C         copy image & close        Ctrl+S    save to screenshot folder
+  Ctrl+C         copy image & close        Ctrl+S    save to screenshot folder & close
   dbl-click      copy image & close        Esc       close without copying
   right-click    copy image & close        middle-click  menu
 
@@ -670,7 +670,7 @@ class Pin(Gtk.ApplicationWindow):
     def build_menu(self):
         m = Gio.Menu()
         m.append("Copy image & close\tCtrl+C", "win.copy")
-        m.append("Save to screenshots\tCtrl+S", "win.save")
+        m.append("Save to screenshots & close\tCtrl+S", "win.save")
         edit = Gio.Menu()
         edit.append("Undo\tCtrl+Z", "win.undo")
         edit.append("Redo\tCtrl+Shift+Z", "win.redo")
@@ -704,6 +704,7 @@ class Pin(Gtk.ApplicationWindow):
         dest = os.path.join(folder, datetime.datetime.now().strftime("pin_%Y%m%d_%H%M%S.png"))
         shutil.copyfile(self.export_path(), dest)
         self.notify_user(f"Saved {dest}")
+        self.close()
 
     def notify_user(self, msg):
         subprocess.Popen(["notify-send", "-i", "camera-photo-symbolic", "-t", "1500", "Snip", msg])

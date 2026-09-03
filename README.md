@@ -39,7 +39,7 @@ Four small pieces, no daemon, no portal round trip:
 | Zoom | mouse wheel (10 % steps), `Ctrl+0` resets |
 | Opacity | `Ctrl` + wheel, `Ctrl+1` resets |
 | Copy image and close | `Ctrl+C`, double-click, or right-click |
-| Save to screenshot folder | `Ctrl+S` or middle-click menu |
+| Save to screenshot folder and close | `Ctrl+S` or middle-click menu |
 | Close without copying | `Esc` |
 | Annotate | toolbar under the pin (on hover), or tool keys |
 
