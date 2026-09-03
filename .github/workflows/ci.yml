@@ -1,23 +1,47 @@
+# Lint only: ShellCheck on the shell scripts, Ruff (pyflakes + pycodestyle
+# errors, see pyproject.toml) on the Python files. Nothing here needs a
+# display or Hyprland, so it runs on a plain Ubuntu runner in a few seconds.
+#
+# Robustness choices:
+# - actions are pinned to commit SHAs (the tag is in the comment), and the
+#   Ruff version is pinned too, so an upstream release cannot turn main red
+# - the two linters are separate jobs, so one failing never hides the other
+# - the token is read-only and a newer push cancels an older run
 name: CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [main]
   pull_request:
-    branches: [ "main" ]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  check-code:
+  shellcheck:
+    name: ShellCheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      # 1. Catches Bash script bugs
-      - name: Lint Bash (ShellCheck)
-        uses: ludeeus/action-shellcheck@master
-
-      # 2. Catches Python syntax errors, unused imports, and typos
-      - name: Lint Python (Ruff)
-        uses: astral-sh/ruff-action@v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          args: 'check .'
+          persist-credentials: false
+      # shellcheck ships with the Ubuntu runner image; no third-party action needed
+      - run: shellcheck --version
+      - run: shellcheck snip-pin.sh install.sh
+
+  ruff:
+    name: Ruff
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/ruff-action@278981a28ce3188b1e39527901f38254bf3aac89 # v4.1.0
+        with:
+          version: "0.16.5"
+          args: check .

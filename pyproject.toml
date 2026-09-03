@@ -2,12 +2,12 @@
 line-length = 120
 
 [tool.ruff.lint]
-# Only check for standard PEP8 (E) and Pyflakes (F) errors
+# Pyflakes (F: undefined names, unused imports, ...) and pycodestyle errors
+# (E). Formatting is deliberately not enforced; the code is written in a
+# compact style on purpose.
 select = ["E", "F"]
-
-# Ignore style choices that conflict with the codebase's compact formatting
-# E701: multiple statements on one line (def f(): x)
-# E702: multiple statements on one line (x; y)
-# E402: module level import not at top of file
-# E501: line too long
-ignore = ["E701", "E702", "E402", "E501"]
+ignore = [
+    "E402",  # imports not at top: the socket hand-over and gi.require_version must run before the GTK imports
+    "E701",  # multiple statements on one line (if x: y)
+    "E702",  # multiple statements on one line (x; y)
+]
