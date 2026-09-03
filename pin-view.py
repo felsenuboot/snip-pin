@@ -207,6 +207,7 @@ class Pin(Gtk.ApplicationWindow):
         self.typing = None            # text op being typed
         self._syncing = False
         self.hovered = False
+        self.toolbar_shown = False    # tracked ourselves: get_visible() is true during the fade-out
         self.hide_timer = None
 
         self.set_decorated(False)
@@ -270,33 +271,37 @@ class Pin(Gtk.ApplicationWindow):
         self.area.set_content_width(w)
         self.area.set_content_height(h)
         self.set_default_size(w, h)
-        if self.toolbar.get_visible():
+        if self.toolbar_shown:
             # the popup does not follow a resize of its parent on its own
             GLib.timeout_add(80, self.show_toolbar)
         self.area.queue_draw()
 
     def show_toolbar(self):
-        self.toolbar.popdown()
-        self.toolbar.popup()
+        if self.toolbar_shown:
+            self.toolbar.popdown()
+            self.toolbar.popup()
         return False
 
     # The toolbar is its own surface, so moving the pointer from the pin onto
     # it counts as leaving the pin: hide only after a short grace period that
-    # entering either surface cancels.
+    # entering either surface cancels. The fading toolbar sends a final leave
+    # of its own; a second popdown would restart the fade, so ignore it.
     def on_hover(self, entered):
         self.hovered = entered
         if self.hide_timer is not None:
             GLib.source_remove(self.hide_timer)
             self.hide_timer = None
         if entered:
-            if not self.toolbar.get_visible():
+            if not self.toolbar_shown:
+                self.toolbar_shown = True
                 self.toolbar.popup()
-        else:
+        elif self.toolbar_shown:
             self.hide_timer = GLib.timeout_add(TOOLBAR_HIDE_MS, self.hide_toolbar)
 
     def hide_toolbar(self):
         self.hide_timer = None
-        if not self.hovered:
+        if not self.hovered and self.toolbar_shown:
+            self.toolbar_shown = False
             self.toolbar.popdown()
         return False
 
