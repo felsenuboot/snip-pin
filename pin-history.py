@@ -4,8 +4,9 @@
 usage: pin-history.py CACHE_DIR SNIP_PIN_SH
 
   click / Enter   pin the snip again (where it was taken, if known)
+  right-click     copy the snip to the clipboard and close
   Delete          remove it from the cache
-  Esc / right-click   close
+  Esc             close (right-click on empty space closes too)
 
 Snips are the PNG files in CACHE_DIR, newest first. Pinning runs
 `SNIP_PIN_SH pin FILE`, which restores the capture position from the name.
@@ -61,9 +62,13 @@ class History(Gtk.ApplicationWindow):
         keys = Gtk.EventControllerKey()
         keys.connect("key-pressed", self.on_key)
         self.add_controller(keys)
+        # right-click on a thumbnail copies it; anywhere else just closes
         rclick = Gtk.GestureClick(button=3)
-        rclick.connect("pressed", lambda *a: self.close())
-        self.add_controller(rclick)
+        rclick.connect("pressed", self.on_rclick)
+        self.flow.add_controller(rclick)
+        rclose = Gtk.GestureClick(button=3)
+        rclose.connect("pressed", lambda *a: self.close())
+        self.add_controller(rclose)
 
         self.pending = snips(cache)
         self.empty.set_visible(not self.pending)
@@ -107,6 +112,18 @@ class History(Gtk.ApplicationWindow):
     def pin(self, path):
         subprocess.Popen([self.snip_pin, "pin", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         self.close()
+
+    def copy(self, path):
+        with open(path, "rb") as f:
+            subprocess.Popen(["wl-copy", "-t", "image/png"], stdin=f,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        self.close()
+
+    def on_rclick(self, gesture, n, x, y):
+        child = self.flow.get_child_at_pos(int(x), int(y))
+        if child is not None:
+            gesture.set_state(Gtk.EventSequenceState.CLAIMED)
+            self.copy(child.path)
 
     def remove(self, child):
         try:
