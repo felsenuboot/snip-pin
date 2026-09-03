@@ -3,7 +3,8 @@
 
 usage: pin-history.py CACHE_DIR SNIP_PIN_SH
 
-  click / Enter   pin the snip again (where it was taken, if known)
+  click / arrows  select a snip
+  double-click / Enter   pin it again (where it was taken, if known)
   right-click     copy the snip to the clipboard and close
   K               keep / unkeep: kept snips never expire
   Delete          remove it from the cache
@@ -62,7 +63,7 @@ class History(Gtk.ApplicationWindow):
 
         self.flow = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.SINGLE, homogeneous=True,
                                 min_children_per_line=COLUMNS, max_children_per_line=COLUMNS,
-                                row_spacing=6, column_spacing=6, activate_on_single_click=True)
+                                row_spacing=6, column_spacing=6, activate_on_single_click=False)
         self.flow.set_margin_top(12); self.flow.set_margin_bottom(12)
         self.flow.set_margin_start(12); self.flow.set_margin_end(12)
         self.flow.set_valign(Gtk.Align.START)
@@ -72,7 +73,7 @@ class History(Gtk.ApplicationWindow):
         scroller = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER, vexpand=True)
         scroller.set_child(self.flow)
         bar = Gtk.ActionBar()
-        hint = Gtk.Label(label="Enter pin  ·  right-click copy  ·  K keep  ·  Del remove")
+        hint = Gtk.Label(label="double-click / Enter pin  ·  right-click copy  ·  K keep  ·  Del remove")
         hint.add_css_class("snip-hint")
         bar.pack_start(hint)
         clear = Gtk.Button(label="Clear history")

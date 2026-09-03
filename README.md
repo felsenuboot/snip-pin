@@ -137,9 +137,10 @@ the capture position, so a snip pinned again lands where it was taken.
 | `snip-pin.sh clear` | delete every snip that is not kept |
 
 Pressing the snip key twice quickly also opens the history: the second press
-aborts the selection the first one started. In the picker, click or `Enter`
-pins the selected snip, right-click copies it to the clipboard, `K` keeps or
-unkeeps it, `Delete` removes it, `Esc` closes. The "Clear history" button
+aborts the selection the first one started. In the picker, click or use the
+arrow keys to select a snip; double-click or `Enter` pins it, right-click
+copies it to the clipboard, `K` keeps or unkeeps it, `Delete` removes it,
+`Esc` closes. The "Clear history" button
 asks once, then deletes everything that is not kept.
 
 ## Configuration
