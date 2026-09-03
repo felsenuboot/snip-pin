@@ -11,7 +11,8 @@ Two small pieces, no daemon, no portal round trip:
 
 - `snip-pin.sh` – freezes the screen, runs `slurp` (fed with window rectangles
   so windows highlight and snap), captures with `grim`, copies with `wl-copy`,
-  and launches the viewer.
+  and launches the viewer. Click a window or drag a region; right-click or
+  `Esc` aborts without taking a screenshot.
 - `pin-view.py` – a single-file GTK4 window that shows the image 1:1, asks
   Hyprland to place it at the capture position (Wayland apps cannot position
   themselves) and doubles as a small annotation editor.

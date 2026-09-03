@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # snip-pin: Snipaste-style snip & pin for Hyprland.
 #   1. freeze the screen, select a region with slurp; hovering a window highlights
-#      it and a single click snaps to the whole window, drag for a free region
+#      it and a single click snaps to the whole window, drag for a free region,
+#      right-click or Esc aborts
 #   2. grim captures the region; a copy goes to the clipboard
 #   3. pin-view.py shows it pinned on top, exactly where it was captured
 # Pin controls: drag = move, wheel = zoom, Ctrl+wheel = opacity, Ctrl+C copy,
-# Ctrl+S save, right-click menu, Esc / double-click = close.
+# Ctrl+S save, middle-click menu, Esc = close, double-/right-click = copy & close.
 # Testing hook: SNIP_GEOM=WxH+X+Y skips the interactive selection.
 
 HERE=$(dirname "$(readlink -f "$0")")
@@ -22,15 +23,31 @@ else
         .[] | select(.workspace.id == $ws and .mapped and (.hidden | not))
             | "\(.at[0]),\(.at[1]) \(.size[0])x\(.size[1])"')
 
+    # Right-click aborts the selection. slurp treats every mouse button alike,
+    # so a temporary Hyprland bind swallows the press and ends slurp instead.
+    # Hyprland with a Lua config rejects `keyword`; it takes `eval` instead.
+    cleanup() {
+        [[ -n "$pid_freeze" ]] && kill "$pid_freeze" 2>/dev/null
+        if [[ -n "$lua_cfg" ]]; then
+            hyprctl eval 'hl.unbind("mouse:274")' >/dev/null 2>&1
+        else
+            hyprctl keyword unbind ", mouse:274" >/dev/null 2>&1
+        fi
+    }
+    trap cleanup EXIT
+    if hyprctl keyword bind ", mouse:274, exec, pkill -x slurp" 2>&1 | grep -q non-legacy; then
+        lua_cfg=1
+        hyprctl eval 'hl.bind("mouse:274", hl.dsp.exec_cmd("pkill -x slurp"))' >/dev/null 2>&1
+    fi
+
     if command -v hyprpicker >/dev/null; then
         hyprpicker -r -z &
         pid_freeze=$!
-        trap 'kill "$pid_freeze" 2>/dev/null' EXIT
         sleep 0.1
     fi
     geom=$(printf '%s\n' "$rects" | slurp -b "#00000080" -c "#888888ff" -w 1 -f "%wx%h+%x+%y")
     rc=$?
-    [[ -n "$pid_freeze" ]] && kill "$pid_freeze" 2>/dev/null
+    cleanup
     trap - EXIT
     [[ $rc -ne 0 || -z "$geom" ]] && exit 0
 fi
