@@ -9,7 +9,7 @@ usage: pin-view.py IMAGE [X Y]
   dbl-click      copy image & close        Esc       close without copying
   right-click    menu
 
-Annotations (toolbar under the pin, or keys):
+Annotations (toolbar under the pin while the pointer hovers it, or keys):
   R rectangle   A arrow   P pen   T text   M marker   B blur (mosaic)
   1-7 colour    [ ] stroke width    Ctrl+Z / Ctrl+Shift+Z undo / redo
   With a tool selected, left-drag draws; press its key again (or Esc) to
@@ -46,6 +46,7 @@ MARKER_ALPHA = 0.4
 MARKER_FACTOR = 3.5                                # marker stroke = width * factor
 TEXT_PX = {2: 16, 4: 22, 7: 30}                    # font size per stroke width
 MOSAIC_PX = {2: 5, 4: 9, 7: 14}                    # block size per stroke width
+TOOLBAR_HIDE_MS = 300                              # grace period after the pointer leaves
 
 CSS = f"""
 window.snip-pin {{
@@ -205,6 +206,8 @@ class Pin(Gtk.ApplicationWindow):
         self.pending = None           # op being dragged out
         self.typing = None            # text op being typed
         self._syncing = False
+        self.hovered = False
+        self.hide_timer = None
 
         self.set_decorated(False)
         self.set_resizable(False)
@@ -241,6 +244,11 @@ class Pin(Gtk.ApplicationWindow):
         scroll.connect("scroll", self.on_scroll)
         self.area.add_controller(scroll)
 
+        hover = Gtk.EventControllerMotion()
+        hover.connect("enter", lambda c, x, y: self.on_hover(True))
+        hover.connect("leave", lambda c: self.on_hover(False))
+        self.area.add_controller(hover)
+
         keys = Gtk.EventControllerKey()
         keys.connect("key-pressed", self.on_key)
         self.add_controller(keys)
@@ -270,6 +278,26 @@ class Pin(Gtk.ApplicationWindow):
     def show_toolbar(self):
         self.toolbar.popdown()
         self.toolbar.popup()
+        return False
+
+    # The toolbar is its own surface, so moving the pointer from the pin onto
+    # it counts as leaving the pin: hide only after a short grace period that
+    # entering either surface cancels.
+    def on_hover(self, entered):
+        self.hovered = entered
+        if self.hide_timer is not None:
+            GLib.source_remove(self.hide_timer)
+            self.hide_timer = None
+        if entered:
+            if not self.toolbar.get_visible():
+                self.toolbar.popup()
+        else:
+            self.hide_timer = GLib.timeout_add(TOOLBAR_HIDE_MS, self.hide_toolbar)
+
+    def hide_toolbar(self):
+        self.hide_timer = None
+        if not self.hovered:
+            self.toolbar.popdown()
         return False
 
     def set_scale(self, s):
@@ -389,6 +417,10 @@ class Pin(Gtk.ApplicationWindow):
         pop.add_css_class("snip-toolbar")
         box = Gtk.Box(spacing=2)
         pop.set_child(box)
+        hover = Gtk.EventControllerMotion()
+        hover.connect("enter", lambda c, x, y: self.on_hover(True))
+        hover.connect("leave", lambda c: self.on_hover(False))
+        box.add_controller(hover)
 
         def add(widget):
             widget.set_focusable(False)
@@ -635,7 +667,6 @@ def main():
         win = Pin(app, path, pos)
         win.present()
         win.place()
-        GLib.idle_add(win.show_toolbar)
     app.connect("activate", activate)
     GLib.set_prgname(APP_ID)   # -> Wayland app_id / Hyprland class "snip-pin"
     app.run([sys.argv[0]])

@@ -26,11 +26,12 @@ Two small pieces, no daemon, no portal round trip:
 | Copy image and close | `Ctrl+C`, double-click, or right-click menu |
 | Save to screenshot folder | `Ctrl+S` or right-click menu |
 | Close without copying | `Esc` |
-| Annotate | toolbar under the pin, or tool keys |
+| Annotate | toolbar under the pin (on hover), or tool keys |
 
 ## Annotations
 
-The pin is the editor: a toolbar sits under every pin. Pick a tool and draw
+The pin is the editor: a toolbar appears under the pin while the pointer is
+over it. Pick a tool and draw
 with the left mouse button; with no tool selected the pin behaves exactly as
 before (drag moves it, double-click copies). Whatever is drawn is baked into
 the image that `Ctrl+C` and `Ctrl+S` export. The original snip on disk stays
