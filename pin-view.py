@@ -15,7 +15,17 @@ Annotations (toolbar under the pin while the pointer hovers it, or keys):
   With a tool selected, left-drag draws; press its key again (or Esc) to
   deselect. Copy and save bake the annotations into the image.
 """
-import os, subprocess, sys, time, json, datetime, shutil, warnings, math, socket, atexit
+import atexit
+import datetime
+import json
+import math
+import os
+import shutil
+import socket
+import subprocess
+import sys
+import time
+import warnings
 
 # One process for all pins: the first viewer listens on a socket, later ones
 # hand their arguments over and exit before GTK is even imported (~20 ms
@@ -45,12 +55,13 @@ if __name__ == "__main__" and len(sys.argv) >= 2:
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 import cairo
 import gi
+
 gi.require_version("Gtk", "4.0")
 gi.require_version("Gdk", "4.0")
 gi.require_version("GdkPixbuf", "2.0")
 gi.require_version("Pango", "1.0")
 gi.require_version("PangoCairo", "1.0")
-from gi.repository import Gtk, Gdk, GdkPixbuf, GLib, Gio, Pango, PangoCairo
+from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk, Pango, PangoCairo
 
 APP_ID = "snip-pin"
 ZOOM_STEP = 1.10
@@ -111,7 +122,7 @@ def norm_rect(pts):
 def mosaic_pixbuf(pixbuf, op):
     x0, y0, x1, y1 = norm_rect(op["pts"])
     x0, y0 = max(0, int(x0)), max(0, int(y0))
-    x1, y1 = min(pixbuf.get_width(), int(math.ceil(x1))), min(pixbuf.get_height(), int(math.ceil(y1)))
+    x1, y1 = min(pixbuf.get_width(), math.ceil(x1)), min(pixbuf.get_height(), math.ceil(y1))
     w, h = x1 - x0, y1 - y0
     if w < 1 or h < 1:
         return None
@@ -307,8 +318,8 @@ class Pin(Gtk.ApplicationWindow):
 
     # ---- geometry -------------------------------------------------------
     def apply_scale(self):
-        w = max(MIN_PX, int(round(self.iw * self.scale)))
-        h = max(MIN_PX, int(round(self.ih * self.scale)))
+        w = max(MIN_PX, round(self.iw * self.scale))
+        h = max(MIN_PX, round(self.ih * self.scale))
         self.area.set_content_width(w)
         self.area.set_content_height(h)
         self.set_default_size(w, h)
@@ -580,7 +591,7 @@ class Pin(Gtk.ApplicationWindow):
         if self.moving or (abs(dx) < 4 and abs(dy) < 4):
             return
         self.moving = True
-        ok, sx, sy = gesture.get_start_point()
+        _ok, sx, sy = gesture.get_start_point()
         surface = self.get_surface()
         if isinstance(surface, Gdk.Toplevel):
             surface.begin_move(gesture.get_device(), 1, sx + dx, sy + dy, gesture.get_current_event_time())

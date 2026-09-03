@@ -11,13 +11,19 @@ usage: pin-history.py CACHE_DIR SNIP_PIN_SH
 Snips are the PNG files in CACHE_DIR, newest first. Pinning runs
 `SNIP_PIN_SH pin FILE`, which restores the capture position from the name.
 """
-import os, subprocess, sys, datetime, warnings
+import datetime
+import os
+import subprocess
+import sys
+import warnings
+
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 import gi
+
 gi.require_version("Gtk", "4.0")
 gi.require_version("Gdk", "4.0")
 gi.require_version("GdkPixbuf", "2.0")
-from gi.repository import Gtk, Gdk, GdkPixbuf, GLib, Gio
+from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk
 
 APP_ID = "snip-pin"          # same class as pins: the float rule applies
 THUMB_W, THUMB_H = 220, 140

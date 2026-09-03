@@ -38,16 +38,16 @@ notify() { command -v notify-send >/dev/null && notify-send -i camera-photo-symb
 # live in one pin-view.py process: a running one takes the file over a socket
 # (see pin-view.py), so this returns in a few milliseconds after the first.
 pin_file() {
-    local file=$1 x y
+    local file=$1 args=("$1")
     if [[ $(basename "$file") =~ _x(-?[0-9]+)_y(-?[0-9]+)\.png$ ]]; then
-        x=${BASH_REMATCH[1]}; y=${BASH_REMATCH[2]}
+        args+=("${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}")
     fi
-    setsid -f "$VIEWER" "$file" $x $y >/dev/null 2>&1
+    setsid -f "$VIEWER" "${args[@]}" >/dev/null 2>&1
 }
 
 case "${1:-}" in
     last)
-        file=$(ls -t "$CACHE"/*.png 2>/dev/null | head -1)
+        file=$(find "$CACHE" -maxdepth 1 -name '*.png' -printf '%T@ %p\n' | sort -rn | head -1 | cut -d' ' -f2-)
         [[ -z "$file" ]] && { notify "No snips in the cache"; exit 0; }
         pin_file "$file"
         exit 0 ;;

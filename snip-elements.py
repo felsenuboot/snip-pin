@@ -37,7 +37,7 @@ def read_ppm(data):
 
 def runs(mask):
     """Runs of True along axis 1 -> (row, start, end, length), end exclusive."""
-    h, w = mask.shape
+    _h, w = mask.shape
     start = np.empty_like(mask)
     start[:, 0] = mask[:, 0]
     np.logical_and(mask[:, 1:], ~mask[:, :-1], out=start[:, 1:])
