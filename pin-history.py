@@ -31,8 +31,9 @@ from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk
 APP_ID = "snip-pin"          # same class as pins: the float rule applies
 THUMB_W, THUMB_H = 220, 140
 COLUMNS = 4
-MOVE_KEYS = {Gdk.KEY_a: -1, Gdk.KEY_h: -1, Gdk.KEY_d: 1, Gdk.KEY_l: 1,
-             Gdk.KEY_w: -COLUMNS, Gdk.KEY_k: -COLUMNS, Gdk.KEY_s: COLUMNS, Gdk.KEY_j: COLUMNS}
+MOVE_KEYS = {Gdk.KEY_Left: -1, Gdk.KEY_a: -1, Gdk.KEY_h: -1, Gdk.KEY_Right: 1, Gdk.KEY_d: 1, Gdk.KEY_l: 1,
+             Gdk.KEY_Up: -COLUMNS, Gdk.KEY_w: -COLUMNS, Gdk.KEY_k: -COLUMNS,
+             Gdk.KEY_Down: COLUMNS, Gdk.KEY_s: COLUMNS, Gdk.KEY_j: COLUMNS}
 
 CSS = """
 window.snip-history { border: 2px solid #ff9f1c; }
@@ -79,7 +80,7 @@ class History(Gtk.ApplicationWindow):
                                "  ·  arrows / WASD / HJKL move")
         hint.add_css_class("snip-hint")
         bar.pack_start(hint)
-        clear = Gtk.Button(label="Clear history")
+        clear = Gtk.Button(label="Clear history", can_focus=False)   # keys belong to the grid
         clear.connect("clicked", self.clear_all)
         bar.pack_end(clear)
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -89,6 +90,7 @@ class History(Gtk.ApplicationWindow):
         self.set_child(box)
 
         keys = Gtk.EventControllerKey()
+        keys.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)   # before any child sees the key
         keys.connect("key-pressed", self.on_key)
         self.add_controller(keys)
         # right-click on a thumbnail copies it; anywhere else just closes
