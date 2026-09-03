@@ -3,10 +3,10 @@
 
 usage: pin-history.py CACHE_DIR SNIP_PIN_SH
 
-  click / arrows  select a snip
+  click / arrows / WASD / HJKL   select a snip
   double-click / Enter   pin it again, centred on the screen
   right-click     copy the snip to the clipboard and close
-  K               keep / unkeep: kept snips never expire
+  F or *          keep / unkeep: kept snips never expire
   Delete          remove it from the cache
   Esc             close (right-click on empty space closes too)
   Clear button    remove every snip that is not kept
@@ -31,6 +31,8 @@ from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk
 APP_ID = "snip-pin"          # same class as pins: the float rule applies
 THUMB_W, THUMB_H = 220, 140
 COLUMNS = 4
+MOVE_KEYS = {Gdk.KEY_a: -1, Gdk.KEY_h: -1, Gdk.KEY_d: 1, Gdk.KEY_l: 1,
+             Gdk.KEY_w: -COLUMNS, Gdk.KEY_k: -COLUMNS, Gdk.KEY_s: COLUMNS, Gdk.KEY_j: COLUMNS}
 
 CSS = """
 window.snip-history { border: 2px solid #ff9f1c; }
@@ -73,7 +75,8 @@ class History(Gtk.ApplicationWindow):
         scroller = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER, vexpand=True)
         scroller.set_child(self.flow)
         bar = Gtk.ActionBar()
-        hint = Gtk.Label(label="double-click / Enter pin  ·  right-click copy  ·  K keep  ·  Del remove")
+        hint = Gtk.Label(label="double-click / Enter pin  ·  right-click copy  ·  F keep  ·  Del remove"
+                               "  ·  arrows / WASD / HJKL move")
         hint.add_css_class("snip-hint")
         bar.pack_start(hint)
         clear = Gtk.Button(label="Clear history")
@@ -221,9 +224,18 @@ class History(Gtk.ApplicationWindow):
             self.pin(child.path); return True
         if keyval == Gdk.KEY_Delete:
             self.remove(child); return True
-        if keyval in (Gdk.KEY_k, Gdk.KEY_K):
+        if keyval in (Gdk.KEY_f, Gdk.KEY_F, Gdk.KEY_asterisk):
             self.toggle_keep(child); return True
+        step = MOVE_KEYS.get(keyval)
+        if step is not None:
+            self.move_selection(child, step); return True
         return False
+
+    def move_selection(self, child, step):
+        nxt = self.flow.get_child_at_index(child.get_index() + step)
+        if nxt is not None:
+            self.flow.select_child(nxt)
+            nxt.grab_focus()
 
 
 def main():
