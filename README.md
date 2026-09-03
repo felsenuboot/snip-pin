@@ -12,12 +12,11 @@ around, zoom it, fade it, annotate it, copy or save it.
 </p>
 
 > [!NOTE]
-> **This tool was written mostly by an AI.** Nearly all of the code was produced
-> by Claude Code (Anthropic's coding agent) under my direction. I read and test
-> what it writes and use the tool daily, but nobody has audited it. It works on
-> my machine: Arch Linux, Hyprland 0.56 with the Lua config, GTK 4.22. Use it at
-> your own risk; there is no warranty of any kind. Issues and pull requests are
-> welcome. This project is not affiliated with Snipaste or Hyprland.
+> **Status and disclaimer.** This is a personal project, written largely with
+> Claude Code and reviewed by a human, but not audited. It works on my machine
+> (Arch, Hyprland, YubiKey 5). Use at your own risk; there is no warranty.
+> Issues and pull requests are welcome. This project is not affiliated with Snipaste or Hyprland.
+
 
 ## What it does
 
