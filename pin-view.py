@@ -9,10 +9,11 @@ usage: pin-view.py IMAGE [X Y]
   dbl-click      copy image & close        Esc       close without copying
   right-click    menu
 
-Annotations (Ctrl+E toggles edit mode, or press a tool key directly):
+Annotations (toolbar under the pin, or keys):
   R rectangle   A arrow   P pen   T text   M marker   B blur (mosaic)
   1-7 colour    [ ] stroke width    Ctrl+Z / Ctrl+Shift+Z undo / redo
-  Esc leaves edit mode; copy and save bake the annotations into the image.
+  With a tool selected, left-drag draws; press its key again (or Esc) to
+  deselect. Copy and save bake the annotations into the image.
 """
 import os, subprocess, sys, time, json, datetime, shutil, warnings, math
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -30,7 +31,7 @@ ZOOM_STEP = 1.10
 MIN_PX = 40
 BORDER = 2                                         # px, drawn by the viewer itself
 BORDER_COLOR = os.environ.get("SNIP_PIN_BORDER", "#ff9f1c")
-EDIT_COLOR = "#3fa7ff"                             # border tint while editing
+EDIT_COLOR = "#3fa7ff"                             # border tint while a tool is active
 
 # ---- annotation presets --------------------------------------------------
 COLORS = [("red", "#e5312b"), ("orange", "#ff8c1a"), ("yellow", "#ffd21f"),
@@ -196,7 +197,6 @@ class Pin(Gtk.ApplicationWindow):
         self.scale = 1.0
         self.opacity = 1.0
         # annotation state
-        self.editing = False
         self.tool = None
         self.color_idx = 0
         self.width_idx = 1
@@ -250,7 +250,6 @@ class Pin(Gtk.ApplicationWindow):
         self.menu.set_has_arrow(False)
         for name, cb in (("copy", self.copy), ("save", self.save),
                          ("reset", lambda *a: self.set_scale(1.0)), ("close", lambda *a: self.close()),
-                         ("edit", lambda *a: self.set_editing(not self.editing)),
                          ("undo", lambda *a: self.undo()), ("redo", lambda *a: self.redo())):
             act = Gio.SimpleAction.new(name, None)
             act.connect("activate", cb)
@@ -263,15 +262,14 @@ class Pin(Gtk.ApplicationWindow):
         self.area.set_content_width(w)
         self.area.set_content_height(h)
         self.set_default_size(w, h)
-        if self.editing:
+        if self.toolbar.get_visible():
             # the popup does not follow a resize of its parent on its own
-            GLib.timeout_add(80, self.reposition_toolbar)
+            GLib.timeout_add(80, self.show_toolbar)
         self.area.queue_draw()
 
-    def reposition_toolbar(self):
-        if self.editing:
-            self.toolbar.popdown()
-            self.toolbar.popup()
+    def show_toolbar(self):
+        self.toolbar.popdown()
+        self.toolbar.popup()
         return False
 
     def set_scale(self, s):
@@ -339,28 +337,15 @@ class Pin(Gtk.ApplicationWindow):
     def width(self):
         return WIDTHS[self.width_idx][1]
 
-    def set_editing(self, on):
-        if on == self.editing:
-            return
-        self.editing = on
-        if on:
-            self.add_css_class("editing")
-            self.toolbar.popup()
-        else:
-            self.commit_text()
-            self.pending = None
-            self.set_tool(None)
-            self.remove_css_class("editing")
-            self.toolbar.popdown()
-        self.sync_toolbar()
-        self.area.queue_draw()
-
     def set_tool(self, tool):
-        if tool is not None and not self.editing:
-            self.set_editing(True)
         if tool != "text":
             self.commit_text()
+        self.pending = None
         self.tool = tool
+        if tool is None:
+            self.remove_css_class("editing")
+        else:
+            self.add_css_class("editing")
         cursor = {None: None, "text": "text"}.get(tool, "crosshair")
         self.area.set_cursor(Gdk.Cursor.new_from_name(cursor) if cursor else None)
         self.sync_toolbar()
@@ -442,9 +427,6 @@ class Pin(Gtk.ApplicationWindow):
         self.redo_btn = add(Gtk.Button(icon_name="edit-redo-symbolic"))
         self.redo_btn.set_tooltip_text("Redo  [Ctrl+Shift+Z]")
         self.redo_btn.connect("clicked", lambda *a: self.redo())
-        done = add(Gtk.Button(icon_name="object-select-symbolic"))
-        done.set_tooltip_text("Leave edit mode  [Esc / Ctrl+E]")
-        done.connect("clicked", lambda *a: self.set_editing(False))
         return pop
 
     def sync_toolbar(self):
@@ -523,22 +505,22 @@ class Pin(Gtk.ApplicationWindow):
         op, self.pending = self.pending, None
         if op is None:
             return
+        if len(op["pts"]) < 2:                                # a tap draws nothing
+            self.area.queue_draw(); return
         if op["kind"] in ("rect", "arrow", "blur"):
-            if len(op["pts"]) < 2:
-                self.area.queue_draw(); return
             (x0, y0), (x1, y1) = op["pts"]
             if math.hypot(x1 - x0, y1 - y0) < 3:
                 self.area.queue_draw(); return
         self.push(op)
 
     def on_click(self, gesture, n, x, y):
-        if self.tool == "text" and n == 1:
+        if n == 2:
+            self.copy()
+        elif self.tool == "text":
             self.commit_text()
             self.typing = self.new_op("text", self.to_img(x, y))
             self.sync_toolbar()
             self.area.queue_draw()
-        elif n == 2 and not self.editing:
-            self.copy()
 
     def on_rclick(self, gesture, n, x, y):
         self.menu.set_pointing_to(Gdk.Rectangle(x=int(x), y=int(y), width=1, height=1))
@@ -569,8 +551,8 @@ class Pin(Gtk.ApplicationWindow):
                 self.typing["text"] += chr(u); self.area.queue_draw(); return True
             return True
         if keyval == Gdk.KEY_Escape:
-            if self.editing:
-                self.set_editing(False)
+            if self.tool is not None:
+                self.set_tool(None)
             else:
                 self.close()
             return True
@@ -579,8 +561,6 @@ class Pin(Gtk.ApplicationWindow):
                 self.copy(); return True
             if keyval in (Gdk.KEY_s, Gdk.KEY_S):
                 self.save(); return True
-            if keyval in (Gdk.KEY_e, Gdk.KEY_E):
-                self.set_editing(not self.editing); return True
             if keyval in (Gdk.KEY_z, Gdk.KEY_Z):
                 self.redo() if shift else self.undo(); return True
             if keyval in (Gdk.KEY_y, Gdk.KEY_Y):
@@ -594,13 +574,12 @@ class Pin(Gtk.ApplicationWindow):
         if name.lower() in TOOL_KEYS:
             tool = TOOL_KEYS[name.lower()]
             self.set_tool(None if tool == self.tool else tool); return True
-        if self.editing:
-            if name.isdigit() and 1 <= int(name) <= len(COLORS):
-                self.set_color(int(name) - 1); return True
-            if keyval == Gdk.KEY_bracketleft:
-                self.set_width(self.width_idx - 1); return True
-            if keyval == Gdk.KEY_bracketright:
-                self.set_width(self.width_idx + 1); return True
+        if name.isdigit() and 1 <= int(name) <= len(COLORS):
+            self.set_color(int(name) - 1); return True
+        if keyval == Gdk.KEY_bracketleft:
+            self.set_width(self.width_idx - 1); return True
+        if keyval == Gdk.KEY_bracketright:
+            self.set_width(self.width_idx + 1); return True
         return False
 
     # ---- actions ----------------------------------------------------------
@@ -609,7 +588,6 @@ class Pin(Gtk.ApplicationWindow):
         m.append("Copy image & close\tCtrl+C", "win.copy")
         m.append("Save to screenshots\tCtrl+S", "win.save")
         edit = Gio.Menu()
-        edit.append("Edit annotations\tCtrl+E", "win.edit")
         edit.append("Undo\tCtrl+Z", "win.undo")
         edit.append("Redo\tCtrl+Shift+Z", "win.redo")
         m.append_section(None, edit)
@@ -657,6 +635,7 @@ def main():
         win = Pin(app, path, pos)
         win.present()
         win.place()
+        GLib.idle_add(win.show_toolbar)
     app.connect("activate", activate)
     GLib.set_prgname(APP_ID)   # -> Wayland app_id / Hyprland class "snip-pin"
     app.run([sys.argv[0]])

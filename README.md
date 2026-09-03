@@ -26,14 +26,15 @@ Two small pieces, no daemon, no portal round trip:
 | Copy image and close | `Ctrl+C`, double-click, or right-click menu |
 | Save to screenshot folder | `Ctrl+S` or right-click menu |
 | Close without copying | `Esc` |
-| Annotate | `Ctrl+E`, a tool key, or right-click menu |
+| Annotate | toolbar under the pin, or tool keys |
 
 ## Annotations
 
-The pin is the editor: press `Ctrl+E` (or a tool key directly) and a toolbar
-appears under the pin. Draw with the left mouse button; whatever is drawn is
-baked into the image that `Ctrl+C` and `Ctrl+S` export. The original snip on
-disk stays untouched.
+The pin is the editor: a toolbar sits under every pin. Pick a tool and draw
+with the left mouse button; with no tool selected the pin behaves exactly as
+before (drag moves it, double-click copies). Whatever is drawn is baked into
+the image that `Ctrl+C` and `Ctrl+S` export. The original snip on disk stays
+untouched.
 
 | Tool | Key | Notes |
 |---|---|---|
@@ -49,11 +50,11 @@ disk stays untouched.
 | Colour | `1`–`7` or the swatches (red, orange, yellow, green, blue, white, black) |
 | Stroke width | `[` / `]` or the three dots (thin, normal, thick); also sets text size and mosaic block size |
 | Undo / redo | `Ctrl+Z` / `Ctrl+Shift+Z` |
-| Deselect tool | press its key again; dragging then moves the pin as usual |
-| Leave edit mode | `Esc` or `Ctrl+E`; a second `Esc` closes the pin |
+| Deselect tool | press its key again, click its button, or `Esc`; dragging then moves the pin as usual |
+| Close | `Esc` with no tool selected |
 
 Annotations are stored in image coordinates, so zooming the pin scales them
-along with the image. The border turns blue while editing.
+along with the image. The border turns blue while a tool is selected.
 
 ## Requirements
 
