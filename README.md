@@ -8,6 +8,14 @@ floating above everything.
 Move it around, zoom it with the mouse wheel, fade it, copy or save it. A copy of
 every snip also lands in the clipboard.
 
+> [!WARNING]
+> **This tool was written mostly by an AI.** Nearly all of the code was produced
+> by Claude Code (Anthropic's coding agent) under my direction. I read and test
+> what it writes and use the tool daily, but nobody has audited it. It works on
+> my machine: Arch Linux, Hyprland 0.56 with the Lua config, GTK 4.22. Use it at
+> your own risk; there is no warranty of any kind. Issues and pull requests are
+> welcome. This project is not affiliated with Snipaste or Hyprland.
+
 Four small pieces, no daemon, no portal round trip:
 
 - `snip-pin.sh` – freezes the screen, runs `slurp` (fed with window and
