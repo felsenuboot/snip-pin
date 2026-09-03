@@ -8,7 +8,7 @@ floating above everything.
 Move it around, zoom it with the mouse wheel, fade it, copy or save it. A copy of
 every snip also lands in the clipboard.
 
-Three small pieces, no daemon, no portal round trip:
+Four small pieces, no daemon, no portal round trip:
 
 - `snip-pin.sh` – freezes the screen, runs `slurp` (fed with window and
   element rectangles so they highlight and snap), captures with `grim`, copies
@@ -24,6 +24,7 @@ Three small pieces, no daemon, no portal round trip:
 - `pin-view.py` – a single-file GTK4 window that shows the image 1:1, asks
   Hyprland to place it at the capture position (Wayland apps cannot position
   themselves) and doubles as a small annotation editor.
+- `pin-history.py` – a thumbnail picker for previous snips (see History).
 
 ## Pin controls
 
@@ -66,6 +67,24 @@ untouched.
 Annotations are stored in image coordinates, so zooming the pin scales them
 along with the image. The border turns blue while a tool is selected.
 
+## History
+
+Every snip is kept in `~/.cache/snip-pin` for seven days (set
+`SNIP_PIN_KEEP_DAYS` in the environment to change that, `0` keeps them
+forever). The file name carries the capture position, so a snip pinned again
+lands where it was taken. Three subcommands bring snips back without taking a
+new screenshot:
+
+| Command | What it does |
+|---|---|
+| `snip-pin.sh last` | pin the newest snip again |
+| `snip-pin.sh history` | open a thumbnail grid of all cached snips, newest first |
+| `snip-pin.sh clipboard` | pin the image in the clipboard, centred on the screen |
+
+In the history picker: click or `Enter` pins the selected snip, arrow keys
+move the selection, `Delete` removes a snip from the cache, `Esc` closes.
+Clipboard pins are added to the cache too, so they show up in the history.
+
 ## Requirements
 
 Arch package names; everything is standard Hyprland tooling:
@@ -100,6 +119,9 @@ Hyprland Lua config (0.56+):
 
 ```lua
 hl.bind("PRINT", hl.dsp.exec_cmd("~/.local/share/snip-pin/snip-pin.sh"), { description = "Snip a region and pin it" })
+hl.bind("SHIFT + PRINT", hl.dsp.exec_cmd("~/.local/share/snip-pin/snip-pin.sh last"), { description = "Pin the last snip again" })
+hl.bind("SUPER + PRINT", hl.dsp.exec_cmd("~/.local/share/snip-pin/snip-pin.sh history"), { description = "Snip history" })
+hl.bind("CTRL + PRINT", hl.dsp.exec_cmd("~/.local/share/snip-pin/snip-pin.sh clipboard"), { description = "Pin the clipboard image" })
 
 hl.window_rule({
     name = "snip-pin",
@@ -118,6 +140,9 @@ Classic `hyprland.conf`:
 
 ```
 bind = , PRINT, exec, ~/.local/share/snip-pin/snip-pin.sh
+bind = SHIFT, PRINT, exec, ~/.local/share/snip-pin/snip-pin.sh last
+bind = SUPER, PRINT, exec, ~/.local/share/snip-pin/snip-pin.sh history
+bind = CTRL, PRINT, exec, ~/.local/share/snip-pin/snip-pin.sh clipboard
 
 windowrulev2 = float, class:^(snip-pin)$
 windowrulev2 = pin, class:^(snip-pin)$

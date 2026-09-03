@@ -8,14 +8,57 @@
 #   3. pin-view.py shows it pinned on top, exactly where it was captured
 # Pin controls: drag = move, wheel = zoom, Ctrl+wheel = opacity, Ctrl+C copy,
 # Ctrl+S save, middle-click menu, Esc = close, double-/right-click = copy & close.
+#
+# Subcommands (all bindable):
+#   snip-pin.sh            select, capture, pin (default)
+#   snip-pin.sh last       pin the newest cached snip again
+#   snip-pin.sh history    thumbnail picker for cached snips
+#   snip-pin.sh clipboard  pin the image in the clipboard
+# Snips are kept in ~/.cache/snip-pin for SNIP_PIN_KEEP_DAYS days (default 7,
+# 0 = keep forever). The file name carries the capture position (_x<X>_y<Y>),
+# so re-pinned snips land where they were taken.
 # Testing hooks: SNIP_GEOM=WxH+X+Y skips the interactive selection,
 # SNIP_NO_ELEMENTS=1 disables element snapping.
 
 HERE=$(dirname "$(readlink -f "$0")")
 VIEWER="$HERE/pin-view.py"
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/snip-pin"
+KEEP="${SNIP_PIN_KEEP_DAYS:-7}"
 mkdir -p "$CACHE"
-find "$CACHE" -name '*.png' -mtime +7 -delete 2>/dev/null
+[[ "$KEEP" -gt 0 ]] && find "$CACHE" -name '*.png' -mtime +"$KEEP" -delete 2>/dev/null
+
+notify() { command -v notify-send >/dev/null && notify-send -i camera-photo-symbolic -t 2000 "Snip" "$1"; }
+
+# pin a cached file; the position comes from its name when present
+pin_file() {
+    local file=$1 x y
+    if [[ $(basename "$file") =~ _x(-?[0-9]+)_y(-?[0-9]+)\.png$ ]]; then
+        x=${BASH_REMATCH[1]}; y=${BASH_REMATCH[2]}
+        setsid -f "$VIEWER" "$file" "$x" "$y" >/dev/null 2>&1
+    else
+        setsid -f "$VIEWER" "$file" >/dev/null 2>&1
+    fi
+}
+
+case "${1:-}" in
+    last)
+        file=$(ls -t "$CACHE"/*.png 2>/dev/null | head -1)
+        [[ -z "$file" ]] && { notify "No snips in the cache"; exit 0; }
+        pin_file "$file"
+        exit 0 ;;
+    history)
+        exec "$HERE/pin-history.py" "$CACHE" "$VIEWER" ;;
+    clipboard)
+        if ! wl-paste --list-types 2>/dev/null | grep -qx 'image/png'; then
+            notify "The clipboard holds no image"; exit 0
+        fi
+        file="$CACHE/$(date +%Y%m%d_%H%M%S_%N)_clipboard.png"
+        wl-paste --type image/png > "$file" || exit 1
+        pin_file "$file"
+        exit 0 ;;
+    "") ;;
+    *)  echo "usage: snip-pin.sh [last|history|clipboard]" >&2; exit 2 ;;
+esac
 
 if [[ -n "$SNIP_GEOM" ]]; then
     geom=$SNIP_GEOM
@@ -70,7 +113,7 @@ fi
 IFS='x+' read -r W H X Y <<< "$geom"
 [[ "$W" -lt 1 || "$H" -lt 1 ]] && exit 0
 
-file="$CACHE/$(date +%Y%m%d_%H%M%S_%N).png"
+file="$CACHE/$(date +%Y%m%d_%H%M%S_%N)_x${X}_y${Y}.png"
 grim -g "${X},${Y} ${W}x${H}" -l 1 "$file" || exit 1
 wl-copy --type image/png < "$file"
-setsid -f "$VIEWER" "$file" "$X" "$Y" >/dev/null 2>&1
+pin_file "$file"
