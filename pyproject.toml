@@ -1,0 +1,13 @@
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+# Only check for standard PEP8 (E) and Pyflakes (F) errors
+select = ["E", "F"]
+
+# Ignore style choices that conflict with the codebase's compact formatting
+# E701: multiple statements on one line (def f(): x)
+# E702: multiple statements on one line (x; y)
+# E402: module level import not at top of file
+# E501: line too long
+ignore = ["E701", "E702", "E402", "E501"]
