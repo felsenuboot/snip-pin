@@ -15,6 +15,8 @@
 #   snip-pin.sh history    thumbnail picker for cached snips
 #   snip-pin.sh clipboard  pin the image in the clipboard
 #   snip-pin.sh pin FILE   pin an image file (used by the history picker)
+# Pressing the snip key twice within SNIP_PIN_TAP_MS (default 300) aborts the
+# selection the first press started and opens the history instead.
 # Snips are kept in ~/.cache/snip-pin for SNIP_PIN_KEEP_DAYS days (default 7,
 # 0 = keep forever). The file name carries the capture position (_x<X>_y<Y>),
 # so re-pinned snips land where they were taken.
@@ -25,7 +27,9 @@ HERE=$(dirname "$(readlink -f "$0")")
 VIEWER="$HERE/pin-view.py"
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/snip-pin"
 KEEP="${SNIP_PIN_KEEP_DAYS:-7}"
-mkdir -p "$CACHE"
+STATE="${XDG_RUNTIME_DIR:-/tmp}/snip-pin"
+TAP_MS="${SNIP_PIN_TAP_MS:-300}"
+mkdir -p "$CACHE" "$STATE"
 [[ "$KEEP" -gt 0 ]] && find "$CACHE" -name '*.png' -mtime +"$KEEP" -delete 2>/dev/null
 
 notify() { command -v notify-send >/dev/null && notify-send -i camera-photo-symbolic -t 2000 "Snip" "$1"; }
@@ -61,7 +65,21 @@ case "${1:-}" in
         wl-paste --type image/png > "$file" || exit 1
         pin_file "$file"
         exit 0 ;;
-    "") ;;
+    "")
+        # Double tap: if another instance started a selection less than TAP_MS
+        # ago, tell it to abort (flag file, and end slurp if it is already up)
+        # and open the history instead.
+        if [[ -z "$SNIP_GEOM" ]]; then
+            now=$(date +%s%3N)
+            if [[ -r "$STATE/selecting" ]] && read -r other started < "$STATE/selecting" \
+               && kill -0 "$other" 2>/dev/null && (( now - started < TAP_MS )); then
+                touch "$STATE/abort"
+                pkill -x slurp; sleep 0.05; pkill -x slurp
+                exec "$0" history
+            fi
+            rm -f "$STATE/abort"
+            echo "$$ $now" > "$STATE/selecting"
+        fi ;;
     *)  echo "usage: snip-pin.sh [last|history|clipboard|pin FILE]" >&2; exit 2 ;;
 esac
 
@@ -87,7 +105,7 @@ else
     # Hyprland with a Lua config rejects `keyword`; it takes `eval` instead.
     cleanup() {
         [[ -n "$pid_freeze" ]] && kill "$pid_freeze" 2>/dev/null
-        rm -f "$elems"
+        rm -f "$elems" "$STATE/selecting" "$STATE/abort"
         if [[ -n "$lua_cfg" ]]; then
             hyprctl eval 'hl.unbind("mouse:274")' >/dev/null 2>&1
         else
@@ -106,6 +124,7 @@ else
         sleep 0.1
     fi
     [[ -n "$pid_detect" ]] && wait "$pid_detect"
+    [[ -e "$STATE/abort" ]] && exit 0            # second tap arrived meanwhile
     # slurp highlights the smallest rectangle under the pointer, so elements
     # inside a window win over the window itself
     geom=$(printf '%s\n' "$rects" | cat - "$elems" | slurp -b "#00000080" -c "#888888ff" -w 1 -f "%wx%h+%x+%y")

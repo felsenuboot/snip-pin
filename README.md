@@ -86,6 +86,10 @@ new screenshot:
 | `snip-pin.sh history` | open a thumbnail grid of all cached snips, newest first |
 | `snip-pin.sh clipboard` | pin the image in the clipboard, centred on the screen |
 
+Pressing the snip key twice quickly (within 300 ms; `SNIP_PIN_TAP_MS` changes
+that) also opens the history: the second press aborts the selection the first
+one started, so no extra binding is needed for the picker.
+
 In the history picker: click or `Enter` pins the selected snip, arrow keys
 move the selection, `Delete` removes a snip from the cache, `Esc` closes.
 Clipboard pins are added to the cache too, so they show up in the history.
