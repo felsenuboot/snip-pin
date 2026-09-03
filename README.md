@@ -1,12 +1,15 @@
 # snip-pin
 
-Snipaste-style **snip and pin** for [Hyprland](https://hyprland.org).
+[![CI](https://github.com/felsenuboot/snip-pin/actions/workflows/ci.yml/badge.svg)](https://github.com/felsenuboot/snip-pin/actions/workflows/ci.yml)
 
-Press a key, drag a region (or click a window, an image or a panel to snap to
-it), and the screenshot is pinned to the screen exactly where it was taken,
-floating above everything.
-Move it around, zoom it with the mouse wheel, fade it, copy or save it. A copy of
-every snip also lands in the clipboard.
+Snipaste-style **snip and pin** for [Hyprland](https://hyprland.org). Press a
+key, pick a region, a window or an element inside a window, and the screenshot
+stays on screen exactly where it was taken, floating above everything. Drag it
+around, zoom it, fade it, annotate it, copy or save it.
+
+<p align="center">
+  <img src="docs/drag-zoom.gif" width="650" alt="A pinned snip being dragged, zoomed and faded">
+</p>
 
 > [!NOTE]
 > **This tool was written mostly by an AI.** Nearly all of the code was produced
@@ -16,125 +19,36 @@ every snip also lands in the clipboard.
 > your own risk; there is no warranty of any kind. Issues and pull requests are
 > welcome. This project is not affiliated with Snipaste or Hyprland.
 
-Four small pieces, no daemon, no portal round trip:
+## What it does
 
-- `snip-pin.sh` – freezes the screen, runs `slurp` (fed with window and
-  element rectangles so they highlight and snap), captures with `grim`, copies
-  with `wl-copy`, and launches the viewer. Click a window or an element, or
-  drag a region; right-click or `Esc` aborts without taking a screenshot.
-- `snip-elements.py` – finds rectangular elements *inside* windows (images,
-  cards, panels, table cells) on a frame of the screen, the way Snipaste does:
-  long horizontal and vertical luminance edges are joined into rectangles.
-  Pure numpy, about 40 ms for a 3440×1440 frame, run while the screen freezes.
-  slurp highlights the smallest rectangle under the pointer, so an element
-  wins over its window. Elements whose edges do not contrast with their
-  surroundings (a dark photo on a dark page) cannot be found this way.
-- `pin-view.py` – a single-file GTK4 window that shows the image 1:1, asks
-  Hyprland to place it at the capture position (Wayland apps cannot position
-  themselves) and doubles as a small annotation editor. All pins live in one
-  process: the first viewer listens on a socket in `$XDG_RUNTIME_DIR`, later
-  ones hand their arguments over and exit before GTK is even imported, so the
-  second and later pins appear in about 100 ms instead of 400 and share one
-  GL driver instance. Closing a pin never touches the others; the process ends
-  with the last window.
-- `pin-history.py` – a thumbnail picker for previous snips (see History).
-
-## Pin controls
-
-| Action | Input |
+| Snap to windows and elements | Annotate on the pin |
 |---|---|
-| Move | drag with left mouse button |
-| Zoom | mouse wheel (10 % steps), `Ctrl+0` resets |
-| Opacity | `Ctrl` + wheel, `Ctrl+1` resets |
-| Copy image and close | `Ctrl+C`, double-click, or right-click |
-| Save to screenshot folder and close | `Ctrl+S` or middle-click menu |
-| Close without copying | `Esc` |
-| Annotate | toolbar under the pin (on hover), or tool keys |
+| ![Selection: the image under the pointer is highlighted](docs/select.png) | ![A pin with rectangle, arrow, text and blur annotations and the toolbar](docs/pin.png) |
+| Windows and the rectangles inside them (images, cards, panels) highlight under the pointer. A click snaps to one, a drag selects freely, right-click or `Esc` aborts. | The pin is the editor: rectangle, arrow, pen, text, marker and blur, baked into what you copy or save. The file on disk stays untouched. |
 
-## Annotations
-
-The pin is the editor: a toolbar appears under the pin while the pointer is
-over it. Pick a tool and draw
-with the left mouse button; with no tool selected the pin behaves exactly as
-before (drag moves it, double- or right-click copies). Whatever is drawn is baked into
-the image that `Ctrl+C` and `Ctrl+S` export. The original snip on disk stays
-untouched.
-
-| Tool | Key | Notes |
-|---|---|---|
-| Rectangle | `R` | outline, drag |
-| Arrow | `A` | drag from tail to head |
-| Pen | `P` | freehand |
-| Text | `T` | click to place, type, `Enter` commits, `Esc` cancels |
-| Marker | `M` | wide, semi-transparent highlighter |
-| Blur | `B` | pixelates a rectangle, for hiding secrets |
-
-| Action | Input |
-|---|---|
-| Colour | `1`–`7` or the swatches (red, orange, yellow, green, blue, white, black) |
-| Stroke width | `[` / `]` or the three dots (thin, normal, thick); also sets text size and mosaic block size |
-| Undo / redo | `Ctrl+Z` / `Ctrl+Shift+Z` |
-| Deselect tool | press its key again, click its button, or `Esc`; dragging then moves the pin as usual |
-| Close | `Esc` with no tool selected |
-
-Annotations are stored in image coordinates, so zooming the pin scales them
-along with the image. The border turns blue while a tool is selected.
-
-## History
-
-Every snip is kept in `~/.cache/snip-pin` for seven days (set
-`SNIP_PIN_KEEP_DAYS` in the environment to change that, `0` keeps them
-forever). The file name carries the capture position, so a snip pinned again
-lands where it was taken. Three subcommands bring snips back without taking a
-new screenshot:
-
-| Command | What it does |
-|---|---|
-| `snip-pin.sh last` | pin the newest snip again |
-| `snip-pin.sh history` | open a thumbnail grid of all cached snips, newest first |
-| `snip-pin.sh clipboard` | pin the image in the clipboard, centred on the screen |
-
-Pressing the snip key twice quickly (within 300 ms; `SNIP_PIN_TAP_MS` changes
-that) also opens the history: the second press aborts the selection the first
-one started, so no extra binding is needed for the picker.
-
-In the history picker: click or `Enter` pins the selected snip, right-click
-copies it to the clipboard and closes the picker, arrow keys move the
-selection, `Delete` removes a snip from the cache, `Esc` or a right-click on
-empty space closes.
-Clipboard pins are added to the cache too, so they show up in the history.
-
-## Requirements
-
-Arch package names; everything is standard Hyprland tooling:
-
-```
-sudo pacman -S --needed grim slurp wl-clipboard jq python-gobject gtk4 hyprpicker python-numpy
-```
-
-`hyprpicker` is optional and only used to freeze the screen during selection.
-`python-numpy` is optional and only used for element snapping; without it only
-windows snap.
-`libnotify` (`notify-send`) is optional for the copy/save toasts.
-
-Tested on Hyprland 0.56 (Lua config) with GTK 4.22. The placement call uses the
-Lua dispatcher syntax, `hl.dsp.window.move(...)`; on older Hyprland releases
-replace it in `pin-view.py` with `movewindowpixel exact X Y,address:...`.
+- **Pins stay put.** Every snip opens as a floating, pinned window at the
+  capture position and shows up in the dock like any other window.
+- **Clipboard first.** Every snip lands in the clipboard as well. Right-click
+  or `Ctrl+C` on a pin copies it again, annotations included, and closes it.
+- **History.** Snips are kept for a week: pin the last one again, pick one from
+  a thumbnail grid, or pin the image that is in the clipboard.
+- **No daemon, no portal.** `slurp`, `grim` and `wl-copy` plus a GTK4 viewer.
+  All pins share one process, so a second pin appears in about 100 ms.
 
 ## Install
 
 ```
+sudo pacman -S --needed grim slurp wl-clipboard jq python-gobject gtk4 hyprpicker python-numpy
 git clone https://github.com/felsenuboot/snip-pin ~/.local/share/snip-pin
 ~/.local/share/snip-pin/install.sh
 ```
 
-`install.sh` puts a desktop entry and icon into `~/.local/share` so docks and
-taskbars show a proper icon for pins; it is optional and safe to rerun.
+`hyprpicker` (freezes the screen during selection), `python-numpy` (element
+snapping) and `libnotify` (toasts) are optional. `install.sh` adds a desktop
+entry and icon so docks show a proper icon for pins.
 
-Bind the script to a key and add a window rule so pins float above everything
-without animations, blur, shadows or rounded corners.
-
-Hyprland Lua config (0.56+):
+Bind the script and add a window rule so pins float above everything without
+animations, blur, shadows or rounded corners. Hyprland Lua config (0.56+):
 
 ```lua
 hl.bind("PRINT", hl.dsp.exec_cmd("~/.local/share/snip-pin/snip-pin.sh"), { description = "Snip a region and pin it" })
@@ -155,7 +69,8 @@ hl.window_rule({
 })
 ```
 
-Classic `hyprland.conf`:
+<details>
+<summary>Classic <code>hyprland.conf</code></summary>
 
 ```
 bind = , PRINT, exec, ~/.local/share/snip-pin/snip-pin.sh
@@ -172,43 +87,103 @@ windowrulev2 = noborder, class:^(snip-pin)$
 windowrulev2 = rounding 0, class:^(snip-pin)$
 ```
 
-The pin draws its own 2 px border (orange by default) so it stands out on
-static pages; set `SNIP_PIN_BORDER="#89b4fa"` in the environment to change it.
+The placement call uses the Lua dispatcher syntax; on Hyprland releases older
+than 0.56 replace `hl.dsp.window.move(...)` in `pin-view.py` with
+`movewindowpixel exact X Y,address:...`.
 
-The save target is read from `~/.config/ml4w/settings/screenshot-folder` if
-present (ML4W dotfiles), otherwise `~/Pictures`.
+</details>
 
-## Architecture notes
+## Using a pin
 
-- **Why a toplevel window and not a layer surface.** A `wlr-layer-shell`
-  surface could position itself and would need no window rules and no
-  `hyprctl` placement loop, but layer surfaces have no app id in docks and
-  taskbars, cannot be pinned per workspace and would need hand-made dragging.
-  Pins are meant to show up in the dock like windows, so they stay toplevels.
-- **Why Python.** GTK 4 plus the GL driver dominate start-up and memory (about
-  170 ms and 200 MB, of which the driver is roughly half and shared); the
-  language is not the cost. The single-process model above removes the
-  start-up for every pin but the first. A native rewrite would save about
-  100 ms on the first pin and a few MB per process, which only matters for
-  packaging.
-- **Element snapping** runs in numpy at full resolution on one colour channel
-  (about 40 ms on 3440×1440); pure Python loops would not fit the budget.
+| Action | Input |
+|---|---|
+| Move | drag with the left mouse button |
+| Zoom | mouse wheel (10 % steps), `Ctrl+0` resets |
+| Opacity | `Ctrl` + wheel, `Ctrl+1` resets |
+| Copy image and close | `Ctrl+C`, double-click or right-click |
+| Save to the screenshot folder and close | `Ctrl+S` or the middle-click menu |
+| Close without copying | `Esc` |
 
-## Why not Flameshot?
+A toolbar appears under the pin while the pointer is over it. Pick a tool and
+draw with the left mouse button; with no tool selected the pin moves as usual.
 
-Flameshot has a pin feature, but on Wayland its pin widget cannot size or place
-its own window: pins open centred, grow when zooming in but never shrink again,
-and end up as a huge transparent window around a small image. The capture also
-goes through the screenshot portal, which on Hyprland shells out to `grim` with
-full PNG compression and costs over a second on a large screen. This tool skips
-both problems.
+| Tool | Key | Notes |
+|---|---|---|
+| Rectangle | `R` | outline |
+| Arrow | `A` | drag from tail to head |
+| Pen | `P` | freehand |
+| Text | `T` | click to place, type, `Enter` commits |
+| Marker | `M` | wide, semi-transparent highlighter |
+| Blur | `B` | pixelates a rectangle, for hiding secrets |
 
-## Testing without a mouse
+Colour: `1`–`7` or the swatches. Stroke width: `[` / `]` or the three dots
+(also sets text size and blur block size). Undo / redo: `Ctrl+Z` /
+`Ctrl+Shift+Z`. Deselect a tool with its key again, its button or `Esc`.
 
-`SNIP_GEOM=400x300+600+400 ./snip-pin.sh` pins that region directly.
-`SNIP_NO_ELEMENTS=1 ./snip-pin.sh` snaps to windows only.
-`grim -s 1 -t ppm - | ./snip-elements.py --debug out.png` draws the detected
-edges and rectangles onto a copy of the screen for tuning.
+## History
+
+![The history picker: a grid of thumbnails over the app they were taken from](docs/history.png)
+
+Every snip is kept in `~/.cache/snip-pin` for seven days. The file name carries
+the capture position, so a snip pinned again lands where it was taken.
+
+| Command | What it does |
+|---|---|
+| `snip-pin.sh last` | pin the newest snip again |
+| `snip-pin.sh history` | open a thumbnail grid of all cached snips, newest first |
+| `snip-pin.sh clipboard` | pin the image in the clipboard, centred on the screen |
+
+Pressing the snip key twice quickly also opens the history: the second press
+aborts the selection the first one started. In the picker, click or `Enter`
+pins the selected snip, right-click copies it to the clipboard, `Delete`
+removes it, `Esc` closes.
+
+## Configuration
+
+Everything is read from the environment of the bound command.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `SNIP_PIN_KEEP_DAYS` | `7` | days to keep snips; `0` keeps them forever |
+| `SNIP_PIN_TAP_MS` | `300` | double-tap window for opening the history |
+| `SNIP_PIN_BORDER` | `#ff9f1c` | colour of the 2 px border a pin draws around itself |
+
+`Ctrl+S` saves to the folder named in `~/.config/ml4w/settings/screenshot-folder`
+if that file exists (ML4W dotfiles), otherwise to `~/Pictures`.
+
+<details>
+<summary>Design notes and testing</summary>
+
+- **Four files.** `snip-pin.sh` freezes the screen, feeds `slurp` with window
+  and element rectangles, captures with `grim`, copies with `wl-copy` and
+  launches the viewer. `snip-elements.py` finds the elements (long horizontal
+  and vertical luminance edges joined into rectangles, the way Snipaste does)
+  in pure numpy, about 40 ms on a 3440×1440 frame while the screen is frozen.
+  `pin-view.py` is the viewer and annotation editor. `pin-history.py` is the
+  thumbnail picker.
+- **Elements without contrast** (a dark photo on a dark page) cannot be found
+  by edge detection. slurp highlights the smallest rectangle under the pointer,
+  so an element wins over its window. Nothing is detected while `python-numpy`
+  is missing; windows still snap.
+- **One process for all pins.** The first viewer listens on a socket in
+  `$XDG_RUNTIME_DIR`; later ones hand their arguments over and exit before GTK
+  is imported. Closing a pin never touches the others.
+- **Why a toplevel window and not a layer surface.** A layer surface could
+  position itself and would need no window rule, but it has no app id in docks,
+  cannot be pinned per workspace and would need hand-made dragging. Pins are
+  meant to behave like windows, so they are windows; Hyprland places them.
+- **Why Python.** GTK 4 and the GL driver dominate start-up and memory; the
+  language is not the cost, and the single-process model removes the start-up
+  for every pin but the first.
+- **Why not Flameshot.** On Wayland its pin widget cannot size or place its own
+  window, and the capture goes through the screenshot portal, which costs over
+  a second on a large screen.
+- **Testing without a mouse.** `SNIP_GEOM=400x300+600+400 ./snip-pin.sh` pins
+  that region directly; `SNIP_NO_ELEMENTS=1` snaps to windows only;
+  `grim -s 1 -t ppm - | ./snip-elements.py --debug out.png` draws the detected
+  edges and rectangles onto a copy of the screen.
+
+</details>
 
 ## License
 
