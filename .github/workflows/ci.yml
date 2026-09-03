@@ -30,9 +30,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # shellcheck ships with the Ubuntu runner image; no third-party action needed
-      - run: shellcheck --version
-      - run: shellcheck snip-pin.sh install.sh
+      # a pinned ShellCheck from PyPI rather than whatever the runner image
+      # ships (findings differ between versions); no third-party action needed
+      - run: pipx run --spec shellcheck-py==0.11.0.1 shellcheck --version
+      - run: pipx run --spec shellcheck-py==0.11.0.1 shellcheck snip-pin.sh install.sh
 
   ruff:
     name: Ruff

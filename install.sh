@@ -20,6 +20,6 @@ Keywords=screenshot;snip;pin;snipaste;
 StartupWMClass=snip-pin
 DESKTOP
 
-command -v update-desktop-database >/dev/null && update-desktop-database "$DATA/applications" || true
-command -v gtk-update-icon-cache >/dev/null && gtk-update-icon-cache -q -t "$DATA/icons/hicolor" 2>/dev/null || true
+if command -v update-desktop-database >/dev/null; then update-desktop-database "$DATA/applications"; fi
+if command -v gtk-update-icon-cache >/dev/null; then gtk-update-icon-cache -q -t "$DATA/icons/hicolor" 2>/dev/null; fi
 echo "installed $DATA/applications/snip-pin.desktop"
