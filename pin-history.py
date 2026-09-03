@@ -5,7 +5,7 @@ usage: pin-history.py CACHE_DIR SNIP_PIN_SH
 
   click / Enter   pin the snip again (where it was taken, if known)
   Delete          remove it from the cache
-  Esc             close
+  Esc / right-click   close
 
 Snips are the PNG files in CACHE_DIR, newest first. Pinning runs
 `SNIP_PIN_SH pin FILE`, which restores the capture position from the name.
@@ -61,6 +61,9 @@ class History(Gtk.ApplicationWindow):
         keys = Gtk.EventControllerKey()
         keys.connect("key-pressed", self.on_key)
         self.add_controller(keys)
+        rclick = Gtk.GestureClick(button=3)
+        rclick.connect("pressed", lambda *a: self.close())
+        self.add_controller(rclick)
 
         self.pending = snips(cache)
         self.empty.set_visible(not self.pending)
