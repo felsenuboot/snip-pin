@@ -14,14 +14,14 @@
 #   snip-pin.sh last       pin the newest cached snip again
 #   snip-pin.sh history    thumbnail picker for cached snips
 #   snip-pin.sh clipboard  pin the image in the clipboard
-#   snip-pin.sh pin FILE   pin an image file (used by the history picker)
+#   snip-pin.sh pin FILE   pin an image file, centred (used by the history picker)
 #   snip-pin.sh clear      empty the history (kept snips stay)
 # Pressing the snip key twice within SNIP_PIN_TAP_MS (default 300) aborts the
 # selection the first press started and opens the history instead.
 # Snips are kept in ~/.cache/snip-pin for SNIP_PIN_KEEP_DAYS days (default 7,
 # 0 = keep forever); snips marked as kept in the picker live in the kept/
 # subfolder and never expire. The file name carries the capture position
-# (_x<X>_y<Y>), so re-pinned snips land where they were taken.
+# (_x<X>_y<Y>), so `last` re-pins a snip where it was taken.
 # Testing hooks: SNIP_GEOM=WxH+X+Y skips the interactive selection,
 # SNIP_NO_ELEMENTS=1 disables element snapping.
 
@@ -57,7 +57,7 @@ case "${1:-}" in
         exec "$HERE/pin-history.py" "$CACHE" "$0" ;;
     pin)
         [[ -f "$2" ]] || exit 1
-        pin_file "$2"
+        setsid -f "$VIEWER" "$2" >/dev/null 2>&1
         exit 0 ;;
     clear)
         n=$(find "$CACHE" -maxdepth 1 -name '*.png' -print -delete | wc -l)

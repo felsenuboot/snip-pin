@@ -127,11 +127,12 @@ Colour: `1`–`7` or the swatches. Stroke width: `[` / `]` or the three dots
 
 Every snip is kept in `~/.cache/snip-pin` for seven days. Snips you mark as
 kept (★) move to a `kept` subfolder and never expire. The file name carries
-the capture position, so a snip pinned again lands where it was taken.
+the capture position, so `last` puts the snip back where it was taken; pins
+opened from the picker appear centred.
 
 | Command | What it does |
 |---|---|
-| `snip-pin.sh last` | pin the newest snip again |
+| `snip-pin.sh last` | pin the newest snip again, where it was taken |
 | `snip-pin.sh history` | open a thumbnail grid of all cached snips, newest first |
 | `snip-pin.sh clipboard` | pin the image in the clipboard, centred on the screen |
 | `snip-pin.sh clear` | delete every snip that is not kept |

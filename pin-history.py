@@ -4,7 +4,7 @@
 usage: pin-history.py CACHE_DIR SNIP_PIN_SH
 
   click / arrows  select a snip
-  double-click / Enter   pin it again (where it was taken, if known)
+  double-click / Enter   pin it again, centred on the screen
   right-click     copy the snip to the clipboard and close
   K               keep / unkeep: kept snips never expire
   Delete          remove it from the cache
@@ -12,7 +12,7 @@ usage: pin-history.py CACHE_DIR SNIP_PIN_SH
   Clear button    remove every snip that is not kept
 
 Snips are the PNG files in CACHE_DIR and CACHE_DIR/kept, newest first. Pinning
-runs `SNIP_PIN_SH pin FILE`, which restores the capture position from the name.
+runs `SNIP_PIN_SH pin FILE`.
 """
 import datetime
 import os
