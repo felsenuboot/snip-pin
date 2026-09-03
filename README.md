@@ -23,7 +23,12 @@ Four small pieces, no daemon, no portal round trip:
   surroundings (a dark photo on a dark page) cannot be found this way.
 - `pin-view.py` – a single-file GTK4 window that shows the image 1:1, asks
   Hyprland to place it at the capture position (Wayland apps cannot position
-  themselves) and doubles as a small annotation editor.
+  themselves) and doubles as a small annotation editor. All pins live in one
+  process: the first viewer listens on a socket in `$XDG_RUNTIME_DIR`, later
+  ones hand their arguments over and exit before GTK is even imported, so the
+  second and later pins appear in about 100 ms instead of 400 and share one
+  GL driver instance. Closing a pin never touches the others; the process ends
+  with the last window.
 - `pin-history.py` – a thumbnail picker for previous snips (see History).
 
 ## Pin controls
@@ -158,6 +163,22 @@ static pages; set `SNIP_PIN_BORDER="#89b4fa"` in the environment to change it.
 
 The save target is read from `~/.config/ml4w/settings/screenshot-folder` if
 present (ML4W dotfiles), otherwise `~/Pictures`.
+
+## Architecture notes
+
+- **Why a toplevel window and not a layer surface.** A `wlr-layer-shell`
+  surface could position itself and would need no window rules and no
+  `hyprctl` placement loop, but layer surfaces have no app id in docks and
+  taskbars, cannot be pinned per workspace and would need hand-made dragging.
+  Pins are meant to show up in the dock like windows, so they stay toplevels.
+- **Why Python.** GTK 4 plus the GL driver dominate start-up and memory (about
+  170 ms and 200 MB, of which the driver is roughly half and shared); the
+  language is not the cost. The single-process model above removes the
+  start-up for every pin but the first. A native rewrite would save about
+  100 ms on the first pin and a few MB per process, which only matters for
+  packaging.
+- **Element snapping** runs in numpy at full resolution on one colour channel
+  (about 40 ms on 3440×1440); pure Python loops would not fit the budget.
 
 ## Why not Flameshot?
 

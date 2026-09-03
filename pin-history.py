@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """Thumbnail picker for previous snips (GTK4).
 
-usage: pin-history.py CACHE_DIR VIEWER
+usage: pin-history.py CACHE_DIR SNIP_PIN_SH
 
   click / Enter   pin the snip again (where it was taken, if known)
   Delete          remove it from the cache
   Esc             close
 
-Snips are the PNG files in CACHE_DIR, newest first. A file name ending in
-_x<X>_y<Y>.png carries the capture position; older names pin centred.
+Snips are the PNG files in CACHE_DIR, newest first. Pinning runs
+`SNIP_PIN_SH pin FILE`, which restores the capture position from the name.
 """
-import os, re, subprocess, sys, datetime, warnings
+import os, subprocess, sys, datetime, warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 import gi
 gi.require_version("Gtk", "4.0")
@@ -21,7 +21,6 @@ from gi.repository import Gtk, Gdk, GdkPixbuf, GLib, Gio
 APP_ID = "snip-pin"          # same class as pins: the float rule applies
 THUMB_W, THUMB_H = 220, 140
 COLUMNS = 4
-POS_RE = re.compile(r"_x(-?\d+)_y(-?\d+)\.png$")
 
 CSS = """
 window.snip-history { border: 2px solid #ff9f1c; }
@@ -36,15 +35,10 @@ def snips(cache):
     return sorted(files, key=os.path.getmtime, reverse=True)
 
 
-def position(path):
-    m = POS_RE.search(os.path.basename(path))
-    return (int(m.group(1)), int(m.group(2))) if m else None
-
-
 class History(Gtk.ApplicationWindow):
-    def __init__(self, app, cache, viewer):
+    def __init__(self, app, cache, snip_pin):
         super().__init__(application=app, title="Snip history")
-        self.cache, self.viewer = cache, viewer
+        self.cache, self.snip_pin = cache, snip_pin
         self.add_css_class("snip-history")
         self.set_default_size(COLUMNS * (THUMB_W + 28) + 24, 620)
 
@@ -108,11 +102,7 @@ class History(Gtk.ApplicationWindow):
         self.pin(child.path)
 
     def pin(self, path):
-        args = [self.viewer, path]
-        pos = position(path)
-        if pos:
-            args += [str(pos[0]), str(pos[1])]
-        subprocess.Popen(["setsid", "-f"] + args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.Popen([self.snip_pin, "pin", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         self.close()
 
     def remove(self, child):
@@ -145,7 +135,7 @@ class History(Gtk.ApplicationWindow):
 def main():
     if len(sys.argv) < 3:
         print(__doc__); sys.exit(1)
-    cache, viewer = sys.argv[1], sys.argv[2]
+    cache, snip_pin = sys.argv[1], sys.argv[2]
     app = Gtk.Application(application_id=None, flags=Gio.ApplicationFlags.NON_UNIQUE)
 
     def activate(app):
@@ -153,7 +143,7 @@ def main():
         css.load_from_string(CSS)
         Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), css,
                                                   Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
-        History(app, cache, viewer).present()
+        History(app, cache, snip_pin).present()
     app.connect("activate", activate)
     GLib.set_prgname(APP_ID)
     Gtk.Window.set_default_icon_name(APP_ID)

@@ -14,6 +14,7 @@
 #   snip-pin.sh last       pin the newest cached snip again
 #   snip-pin.sh history    thumbnail picker for cached snips
 #   snip-pin.sh clipboard  pin the image in the clipboard
+#   snip-pin.sh pin FILE   pin an image file (used by the history picker)
 # Snips are kept in ~/.cache/snip-pin for SNIP_PIN_KEEP_DAYS days (default 7,
 # 0 = keep forever). The file name carries the capture position (_x<X>_y<Y>),
 # so re-pinned snips land where they were taken.
@@ -29,15 +30,15 @@ mkdir -p "$CACHE"
 
 notify() { command -v notify-send >/dev/null && notify-send -i camera-photo-symbolic -t 2000 "Snip" "$1"; }
 
-# pin a cached file; the position comes from its name when present
+# Pin a cached file; the position comes from its name when present. All pins
+# live in one pin-view.py process: a running one takes the file over a socket
+# (see pin-view.py), so this returns in a few milliseconds after the first.
 pin_file() {
     local file=$1 x y
     if [[ $(basename "$file") =~ _x(-?[0-9]+)_y(-?[0-9]+)\.png$ ]]; then
         x=${BASH_REMATCH[1]}; y=${BASH_REMATCH[2]}
-        setsid -f "$VIEWER" "$file" "$x" "$y" >/dev/null 2>&1
-    else
-        setsid -f "$VIEWER" "$file" >/dev/null 2>&1
     fi
+    setsid -f "$VIEWER" "$file" $x $y >/dev/null 2>&1
 }
 
 case "${1:-}" in
@@ -47,7 +48,11 @@ case "${1:-}" in
         pin_file "$file"
         exit 0 ;;
     history)
-        exec "$HERE/pin-history.py" "$CACHE" "$VIEWER" ;;
+        exec "$HERE/pin-history.py" "$CACHE" "$0" ;;
+    pin)
+        [[ -f "$2" ]] || exit 1
+        pin_file "$2"
+        exit 0 ;;
     clipboard)
         if ! wl-paste --list-types 2>/dev/null | grep -qx 'image/png'; then
             notify "The clipboard holds no image"; exit 0
@@ -57,7 +62,7 @@ case "${1:-}" in
         pin_file "$file"
         exit 0 ;;
     "") ;;
-    *)  echo "usage: snip-pin.sh [last|history|clipboard]" >&2; exit 2 ;;
+    *)  echo "usage: snip-pin.sh [last|history|clipboard|pin FILE]" >&2; exit 2 ;;
 esac
 
 if [[ -n "$SNIP_GEOM" ]]; then

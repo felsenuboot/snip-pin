@@ -15,7 +15,33 @@ Annotations (toolbar under the pin while the pointer hovers it, or keys):
   With a tool selected, left-drag draws; press its key again (or Esc) to
   deselect. Copy and save bake the annotations into the image.
 """
-import os, subprocess, sys, time, json, datetime, shutil, warnings, math
+import os, subprocess, sys, time, json, datetime, shutil, warnings, math, socket, atexit
+
+# One process for all pins: the first viewer listens on a socket, later ones
+# hand their arguments over and exit before GTK is even imported (~20 ms
+# instead of a full GTK start-up), so the second and later pins appear at
+# once and share one GL driver instance. Each pin is its own window; closing
+# one leaves the others alone, and the process ends with the last window.
+SOCKET = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "snip-pin.sock")
+
+
+def hand_over(args):
+    s = socket.socket(socket.AF_UNIX)
+    s.settimeout(3)
+    try:
+        s.connect(SOCKET)
+        s.sendall(json.dumps(args).encode() + b"\n")
+        return s.recv(1) == b"1"
+    except OSError:
+        return False
+    finally:
+        s.close()
+
+
+if __name__ == "__main__" and len(sys.argv) >= 2:
+    if hand_over([os.path.abspath(sys.argv[1])] + sys.argv[2:]):
+        sys.exit(0)
+
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 import cairo
 import gi
@@ -188,9 +214,17 @@ def render_png(pixbuf, ops, out_path):
     surf.write_to_png(out_path)
     return out_path
 
+_css_loaded = False
+_seq = 0
+
+
 class Pin(Gtk.ApplicationWindow):
     def __init__(self, app, path, pos):
-        super().__init__(application=app, title="snip-pin")
+        # All pins share one process (see main), so the placement loop tells
+        # windows apart by a unique title until each one has been placed.
+        global _seq
+        _seq += 1
+        super().__init__(application=app, title=f"snip-pin #{_seq}" if pos else "snip-pin")
         self.path = path
         self.pos = pos
         self.pixbuf = GdkPixbuf.Pixbuf.new_from_file(path)
@@ -213,10 +247,13 @@ class Pin(Gtk.ApplicationWindow):
         self.set_decorated(False)
         self.set_resizable(False)
         self.add_css_class("snip-pin")
-        css = Gtk.CssProvider()
-        css.load_from_string(CSS)
-        Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), css,
-                                                  Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        global _css_loaded
+        if not _css_loaded:
+            css = Gtk.CssProvider()
+            css.load_from_string(CSS)
+            Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), css,
+                                                      Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+            _css_loaded = True
 
         self.area = Gtk.DrawingArea()
         self.area.set_draw_func(self.draw)
@@ -345,11 +382,17 @@ class Pin(Gtk.ApplicationWindow):
             except Exception:
                 return None
             for c in clients:
-                if c.get("pid") == os.getpid():
+                if c.get("pid") == os.getpid() and c.get("title") == self.get_title():
                     return c
             return None
 
         def tick():
+            again = step()
+            if not again:
+                self.set_title("snip-pin")
+            return again
+
+        def step():
             c = me()
             if c is None:
                 return time.time() < deadline
@@ -665,17 +708,56 @@ class Pin(Gtk.ApplicationWindow):
     def notify_user(self, msg):
         subprocess.Popen(["notify-send", "-i", "camera-photo-symbolic", "-t", "1500", "Snip", msg])
 
+def open_pin(app, args):
+    pos = (int(args[1]), int(args[2])) if len(args) >= 3 else None
+    win = Pin(app, args[0], pos)
+    win.present()
+    win.place()
+
+
+def serve(app):
+    """Listen for hand-overs from later invocations (see hand_over)."""
+    srv = socket.socket(socket.AF_UNIX)
+    try:
+        srv.bind(SOCKET)
+    except OSError:
+        if hand_over([]):           # somebody else got there first; let them serve
+            return
+        os.unlink(SOCKET)
+        srv.bind(SOCKET)
+    srv.listen(8)
+    srv.setblocking(False)
+    atexit.register(lambda: os.path.exists(SOCKET) and os.unlink(SOCKET))
+
+    def on_connect(fd, cond):
+        conn, _ = srv.accept()
+        try:
+            conn.settimeout(3)
+            data = conn.makefile("rb").readline()
+            args = json.loads(data) if data.strip() else []
+            if args:
+                open_pin(app, args)
+            conn.sendall(b"1")
+        except (OSError, ValueError):
+            pass
+        finally:
+            conn.close()
+        return True
+    GLib.io_add_watch(srv.fileno(), GLib.PRIORITY_DEFAULT, GLib.IO_IN, on_connect)
+    app.hold_socket = srv          # keep it alive with the application
+
+
 def main():
     if len(sys.argv) < 2:
         print(__doc__); sys.exit(1)
-    path = sys.argv[1]
-    pos = (int(sys.argv[2]), int(sys.argv[3])) if len(sys.argv) >= 4 else None
-    # NON_UNIQUE: every pin is its own process, so closing one never touches another
+    # NON_UNIQUE: single-instance handling is the socket in serve(), not
+    # GApplication, because a GApplication id would replace the Wayland
+    # app_id that the window rules and the dock icon key on.
     app = Gtk.Application(application_id=None, flags=Gio.ApplicationFlags.NON_UNIQUE)
+
     def activate(app):
-        win = Pin(app, path, pos)
-        win.present()
-        win.place()
+        serve(app)
+        open_pin(app, [os.path.abspath(sys.argv[1])] + sys.argv[2:])
     app.connect("activate", activate)
     GLib.set_prgname(APP_ID)   # -> Wayland app_id / Hyprland class "snip-pin"
     # Docks look the icon up by app_id via snip-pin.desktop (see README).
