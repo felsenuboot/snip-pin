@@ -15,11 +15,13 @@
 #   snip-pin.sh history    thumbnail picker for cached snips
 #   snip-pin.sh clipboard  pin the image in the clipboard
 #   snip-pin.sh pin FILE   pin an image file (used by the history picker)
+#   snip-pin.sh clear      empty the history (kept snips stay)
 # Pressing the snip key twice within SNIP_PIN_TAP_MS (default 300) aborts the
 # selection the first press started and opens the history instead.
 # Snips are kept in ~/.cache/snip-pin for SNIP_PIN_KEEP_DAYS days (default 7,
-# 0 = keep forever). The file name carries the capture position (_x<X>_y<Y>),
-# so re-pinned snips land where they were taken.
+# 0 = keep forever); snips marked as kept in the picker live in the kept/
+# subfolder and never expire. The file name carries the capture position
+# (_x<X>_y<Y>), so re-pinned snips land where they were taken.
 # Testing hooks: SNIP_GEOM=WxH+X+Y skips the interactive selection,
 # SNIP_NO_ELEMENTS=1 disables element snapping.
 
@@ -29,8 +31,8 @@ CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/snip-pin"
 KEEP="${SNIP_PIN_KEEP_DAYS:-7}"
 STATE="${XDG_RUNTIME_DIR:-/tmp}/snip-pin"
 TAP_MS="${SNIP_PIN_TAP_MS:-300}"
-mkdir -p "$CACHE" "$STATE"
-[[ "$KEEP" -gt 0 ]] && find "$CACHE" -name '*.png' -mtime +"$KEEP" -delete 2>/dev/null
+mkdir -p "$CACHE/kept" "$STATE"
+[[ "$KEEP" -gt 0 ]] && find "$CACHE" -maxdepth 1 -name '*.png' -mtime +"$KEEP" -delete 2>/dev/null
 
 notify() { command -v notify-send >/dev/null && notify-send -i camera-photo-symbolic -t 2000 "Snip" "$1"; }
 
@@ -47,7 +49,7 @@ pin_file() {
 
 case "${1:-}" in
     last)
-        file=$(find "$CACHE" -maxdepth 1 -name '*.png' -printf '%T@ %p\n' | sort -rn | head -1 | cut -d' ' -f2-)
+        file=$(find "$CACHE" -maxdepth 2 -name '*.png' -printf '%T@ %p\n' | sort -rn | head -1 | cut -d' ' -f2-)
         [[ -z "$file" ]] && { notify "No snips in the cache"; exit 0; }
         pin_file "$file"
         exit 0 ;;
@@ -56,6 +58,10 @@ case "${1:-}" in
     pin)
         [[ -f "$2" ]] || exit 1
         pin_file "$2"
+        exit 0 ;;
+    clear)
+        n=$(find "$CACHE" -maxdepth 1 -name '*.png' -print -delete | wc -l)
+        notify "History cleared ($n snips removed)"
         exit 0 ;;
     clipboard)
         if ! wl-paste --list-types 2>/dev/null | grep -qx 'image/png'; then

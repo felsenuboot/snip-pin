@@ -30,8 +30,9 @@ around, zoom it, fade it, annotate it, copy or save it.
   capture position and shows up in the dock like any other window.
 - **Clipboard first.** Every snip lands in the clipboard as well. Right-click
   or `Ctrl+C` on a pin copies it again, annotations included, and closes it.
-- **History.** Snips are kept for a week: pin the last one again, pick one from
-  a thumbnail grid, or pin the image that is in the clipboard.
+- **History.** Snips are kept for a week, or for good if you star them: pin
+  the last one again, pick one from a thumbnail grid, or pin the image that is
+  in the clipboard.
 - **No daemon, no portal.** `slurp`, `grim` and `wl-copy` plus a GTK4 viewer.
   All pins share one process, so a second pin appears in about 100 ms.
 
@@ -124,7 +125,8 @@ Colour: `1`–`7` or the swatches. Stroke width: `[` / `]` or the three dots
 
 ![The history picker: a grid of thumbnails over the app they were taken from](docs/history.png)
 
-Every snip is kept in `~/.cache/snip-pin` for seven days. The file name carries
+Every snip is kept in `~/.cache/snip-pin` for seven days. Snips you mark as
+kept (★) move to a `kept` subfolder and never expire. The file name carries
 the capture position, so a snip pinned again lands where it was taken.
 
 | Command | What it does |
@@ -132,11 +134,13 @@ the capture position, so a snip pinned again lands where it was taken.
 | `snip-pin.sh last` | pin the newest snip again |
 | `snip-pin.sh history` | open a thumbnail grid of all cached snips, newest first |
 | `snip-pin.sh clipboard` | pin the image in the clipboard, centred on the screen |
+| `snip-pin.sh clear` | delete every snip that is not kept |
 
 Pressing the snip key twice quickly also opens the history: the second press
 aborts the selection the first one started. In the picker, click or `Enter`
-pins the selected snip, right-click copies it to the clipboard, `Delete`
-removes it, `Esc` closes.
+pins the selected snip, right-click copies it to the clipboard, `K` keeps or
+unkeeps it, `Delete` removes it, `Esc` closes. The "Clear history" button
+asks once, then deletes everything that is not kept.
 
 ## Configuration
 

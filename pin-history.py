@@ -5,11 +5,13 @@ usage: pin-history.py CACHE_DIR SNIP_PIN_SH
 
   click / Enter   pin the snip again (where it was taken, if known)
   right-click     copy the snip to the clipboard and close
+  K               keep / unkeep: kept snips never expire
   Delete          remove it from the cache
   Esc             close (right-click on empty space closes too)
+  Clear button    remove every snip that is not kept
 
-Snips are the PNG files in CACHE_DIR, newest first. Pinning runs
-`SNIP_PIN_SH pin FILE`, which restores the capture position from the name.
+Snips are the PNG files in CACHE_DIR and CACHE_DIR/kept, newest first. Pinning
+runs `SNIP_PIN_SH pin FILE`, which restores the capture position from the name.
 """
 import datetime
 import os
@@ -34,12 +36,21 @@ window.snip-history { border: 2px solid #ff9f1c; }
 .snip-thumb { padding: 6px; border-radius: 8px; }
 .snip-thumb picture { border-radius: 4px; }
 .snip-thumb label { font-size: 0.85em; opacity: 0.8; }
+.snip-thumb.kept label { color: #ff9f1c; opacity: 1; }
+.snip-hint { opacity: 0.6; font-size: 0.9em; }
 """
 
 
 def snips(cache):
-    files = [os.path.join(cache, f) for f in os.listdir(cache) if f.endswith(".png")]
+    files = []
+    for d in (cache, os.path.join(cache, "kept")):
+        if os.path.isdir(d):
+            files += [os.path.join(d, f) for f in os.listdir(d) if f.endswith(".png")]
     return sorted(files, key=os.path.getmtime, reverse=True)
+
+
+def is_kept(path):
+    return os.path.basename(os.path.dirname(path)) == "kept"
 
 
 class History(Gtk.ApplicationWindow):
@@ -60,9 +71,17 @@ class History(Gtk.ApplicationWindow):
         self.empty = Gtk.Label(label="No snips in the last days.", vexpand=True)
         scroller = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER, vexpand=True)
         scroller.set_child(self.flow)
+        bar = Gtk.ActionBar()
+        hint = Gtk.Label(label="Enter pin  ·  right-click copy  ·  K keep  ·  Del remove")
+        hint.add_css_class("snip-hint")
+        bar.pack_start(hint)
+        clear = Gtk.Button(label="Clear history")
+        clear.connect("clicked", self.clear_all)
+        bar.pack_end(clear)
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         box.append(scroller)
         box.append(self.empty)
+        box.append(bar)
         self.set_child(box)
 
         keys = Gtk.EventControllerKey()
@@ -94,19 +113,63 @@ class History(Gtk.ApplicationWindow):
         pic = Gtk.Picture.new_for_paintable(Gdk.Texture.new_for_pixbuf(pb))
         pic.set_size_request(THUMB_W, THUMB_H)
         pic.set_can_shrink(False)
-        when = datetime.datetime.fromtimestamp(os.path.getmtime(path))
-        label = Gtk.Label(label=f"{when:%a %H:%M}  ·  {w}×{h}")
+        label = Gtk.Label()
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         box.add_css_class("snip-thumb")
         box.append(pic); box.append(label)
         child = Gtk.FlowBoxChild()
         child.set_child(box)
-        child.path = path
+        child.path, child.box, child.label, child.size = path, box, label, (w, h)
+        self.relabel(child)
         self.flow.append(child)
         if not self.flow.get_selected_children():
             self.flow.select_child(child)
             child.grab_focus()
         return True
+
+    def relabel(self, child):
+        when = datetime.datetime.fromtimestamp(os.path.getmtime(child.path))
+        w, h = child.size
+        kept = is_kept(child.path)
+        child.label.set_label(("★ " if kept else "") + f"{when:%a %H:%M}  ·  {w}×{h}")
+        if kept:
+            child.box.add_css_class("kept")
+        else:
+            child.box.remove_css_class("kept")
+
+    def toggle_keep(self, child):
+        src = child.path
+        dst_dir = self.cache if is_kept(src) else os.path.join(self.cache, "kept")
+        os.makedirs(dst_dir, exist_ok=True)
+        dst = os.path.join(dst_dir, os.path.basename(src))
+        try:
+            os.rename(src, dst)      # keeps the mtime, so the order stays
+        except OSError:
+            return
+        child.path = dst
+        self.relabel(child)
+
+    def clear_all(self, *_):
+        dialog = Gtk.AlertDialog(message="Clear the history?",
+                                 detail="Every snip that is not kept (★) is deleted.",
+                                 buttons=["Cancel", "Clear"], cancel_button=0, default_button=1)
+
+        def done(d, result):
+            try:
+                if d.choose_finish(result) != 1:
+                    return
+            except GLib.Error:
+                return
+            self.clear_unkept()
+        dialog.choose(self, None, done)
+
+    def clear_unkept(self):
+        children, c = [], self.flow.get_first_child()
+        while c is not None:
+            children.append(c); c = c.get_next_sibling()
+        for child in children:
+            if not is_kept(child.path):
+                self.remove(child)
 
     def selected(self):
         sel = self.flow.get_selected_children()
@@ -157,6 +220,8 @@ class History(Gtk.ApplicationWindow):
             self.pin(child.path); return True
         if keyval == Gdk.KEY_Delete:
             self.remove(child); return True
+        if keyval in (Gdk.KEY_k, Gdk.KEY_K):
+            self.toggle_keep(child); return True
         return False
 
 
