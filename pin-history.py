@@ -117,6 +117,8 @@ class History(Gtk.ApplicationWindow):
         with open(path, "rb") as f:
             subprocess.Popen(["wl-copy", "-t", "image/png"], stdin=f,
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.Popen(["notify-send", "-i", "camera-photo-symbolic", "-t", "1500", "Snip", "Copied to clipboard"],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         self.close()
 
     def on_rclick(self, gesture, n, x, y):
