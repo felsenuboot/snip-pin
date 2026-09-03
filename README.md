@@ -2,17 +2,25 @@
 
 Snipaste-style **snip and pin** for [Hyprland](https://hyprland.org).
 
-Press a key, drag a region (or click a window to snap to it), and the screenshot
-is pinned to the screen exactly where it was taken, floating above everything.
+Press a key, drag a region (or click a window, an image or a panel to snap to
+it), and the screenshot is pinned to the screen exactly where it was taken,
+floating above everything.
 Move it around, zoom it with the mouse wheel, fade it, copy or save it. A copy of
 every snip also lands in the clipboard.
 
-Two small pieces, no daemon, no portal round trip:
+Three small pieces, no daemon, no portal round trip:
 
-- `snip-pin.sh` – freezes the screen, runs `slurp` (fed with window rectangles
-  so windows highlight and snap), captures with `grim`, copies with `wl-copy`,
-  and launches the viewer. Click a window or drag a region; right-click or
-  `Esc` aborts without taking a screenshot.
+- `snip-pin.sh` – freezes the screen, runs `slurp` (fed with window and
+  element rectangles so they highlight and snap), captures with `grim`, copies
+  with `wl-copy`, and launches the viewer. Click a window or an element, or
+  drag a region; right-click or `Esc` aborts without taking a screenshot.
+- `snip-elements.py` – finds rectangular elements *inside* windows (images,
+  cards, panels, table cells) on a frame of the screen, the way Snipaste does:
+  long horizontal and vertical luminance edges are joined into rectangles.
+  Pure numpy, about 40 ms for a 3440×1440 frame, run while the screen freezes.
+  slurp highlights the smallest rectangle under the pointer, so an element
+  wins over its window. Elements whose edges do not contrast with their
+  surroundings (a dark photo on a dark page) cannot be found this way.
 - `pin-view.py` – a single-file GTK4 window that shows the image 1:1, asks
   Hyprland to place it at the capture position (Wayland apps cannot position
   themselves) and doubles as a small annotation editor.
@@ -63,10 +71,12 @@ along with the image. The border turns blue while a tool is selected.
 Arch package names; everything is standard Hyprland tooling:
 
 ```
-sudo pacman -S --needed grim slurp wl-clipboard jq python-gobject gtk4 hyprpicker
+sudo pacman -S --needed grim slurp wl-clipboard jq python-gobject gtk4 hyprpicker python-numpy
 ```
 
 `hyprpicker` is optional and only used to freeze the screen during selection.
+`python-numpy` is optional and only used for element snapping; without it only
+windows snap.
 `libnotify` (`notify-send`) is optional for the copy/save toasts.
 
 Tested on Hyprland 0.56 (Lua config) with GTK 4.22. The placement call uses the
@@ -136,6 +146,9 @@ both problems.
 ## Testing without a mouse
 
 `SNIP_GEOM=400x300+600+400 ./snip-pin.sh` pins that region directly.
+`SNIP_NO_ELEMENTS=1 ./snip-pin.sh` snaps to windows only.
+`grim -s 1 -t ppm - | ./snip-elements.py --debug out.png` draws the detected
+edges and rectangles onto a copy of the screen for tuning.
 
 ## License
 

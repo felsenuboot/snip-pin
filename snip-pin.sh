@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # snip-pin: Snipaste-style snip & pin for Hyprland.
-#   1. freeze the screen, select a region with slurp; hovering a window highlights
-#      it and a single click snaps to the whole window, drag for a free region,
+#   1. freeze the screen, select a region with slurp; hovering a window or an
+#      element inside it (image, panel, table cell; found by snip-elements.py)
+#      highlights it and a single click snaps to it, drag for a free region,
 #      right-click or Esc aborts
 #   2. grim captures the region; a copy goes to the clipboard
 #   3. pin-view.py shows it pinned on top, exactly where it was captured
 # Pin controls: drag = move, wheel = zoom, Ctrl+wheel = opacity, Ctrl+C copy,
 # Ctrl+S save, middle-click menu, Esc = close, double-/right-click = copy & close.
-# Testing hook: SNIP_GEOM=WxH+X+Y skips the interactive selection.
+# Testing hooks: SNIP_GEOM=WxH+X+Y skips the interactive selection,
+# SNIP_NO_ELEMENTS=1 disables element snapping.
 
 HERE=$(dirname "$(readlink -f "$0")")
 VIEWER="$HERE/pin-view.py"
@@ -18,6 +20,15 @@ find "$CACHE" -name '*.png' -mtime +7 -delete 2>/dev/null
 if [[ -n "$SNIP_GEOM" ]]; then
     geom=$SNIP_GEOM
 else
+    # Element snapping: grab the screen and look for rectangles (images, panels,
+    # table cells) while the freeze and the window list are prepared. Needs
+    # python-numpy; without it the helper fails quietly and only windows snap.
+    elems=$(mktemp)
+    if [[ -z "$SNIP_NO_ELEMENTS" ]]; then
+        (grim -s 1 -t ppm - | "$HERE/snip-elements.py" > "$elems") 2>/dev/null &
+        pid_detect=$!
+    fi
+
     ws=$(hyprctl activeworkspace -j | jq '.id')
     rects=$(hyprctl clients -j | jq -r --argjson ws "$ws" '
         .[] | select(.workspace.id == $ws and .mapped and (.hidden | not))
@@ -28,6 +39,7 @@ else
     # Hyprland with a Lua config rejects `keyword`; it takes `eval` instead.
     cleanup() {
         [[ -n "$pid_freeze" ]] && kill "$pid_freeze" 2>/dev/null
+        rm -f "$elems"
         if [[ -n "$lua_cfg" ]]; then
             hyprctl eval 'hl.unbind("mouse:274")' >/dev/null 2>&1
         else
@@ -45,7 +57,10 @@ else
         pid_freeze=$!
         sleep 0.1
     fi
-    geom=$(printf '%s\n' "$rects" | slurp -b "#00000080" -c "#888888ff" -w 1 -f "%wx%h+%x+%y")
+    [[ -n "$pid_detect" ]] && wait "$pid_detect"
+    # slurp highlights the smallest rectangle under the pointer, so elements
+    # inside a window win over the window itself
+    geom=$(printf '%s\n' "$rects" | cat - "$elems" | slurp -b "#00000080" -c "#888888ff" -w 1 -f "%wx%h+%x+%y")
     rc=$?
     cleanup
     trap - EXIT
