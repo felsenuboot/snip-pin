@@ -12,9 +12,9 @@ Two small pieces, no daemon, no portal round trip:
 - `snip-pin.sh` – freezes the screen, runs `slurp` (fed with window rectangles
   so windows highlight and snap), captures with `grim`, copies with `wl-copy`,
   and launches the viewer.
-- `pin-view.py` – a ~200 line GTK4 window that shows the image 1:1 and asks
+- `pin-view.py` – a single-file GTK4 window that shows the image 1:1, asks
   Hyprland to place it at the capture position (Wayland apps cannot position
-  themselves).
+  themselves) and doubles as a small annotation editor.
 
 ## Pin controls
 
@@ -26,6 +26,34 @@ Two small pieces, no daemon, no portal round trip:
 | Copy image and close | `Ctrl+C`, double-click, or right-click menu |
 | Save to screenshot folder | `Ctrl+S` or right-click menu |
 | Close without copying | `Esc` |
+| Annotate | `Ctrl+E`, a tool key, or right-click menu |
+
+## Annotations
+
+The pin is the editor: press `Ctrl+E` (or a tool key directly) and a toolbar
+appears under the pin. Draw with the left mouse button; whatever is drawn is
+baked into the image that `Ctrl+C` and `Ctrl+S` export. The original snip on
+disk stays untouched.
+
+| Tool | Key | Notes |
+|---|---|---|
+| Rectangle | `R` | outline, drag |
+| Arrow | `A` | drag from tail to head |
+| Pen | `P` | freehand |
+| Text | `T` | click to place, type, `Enter` commits, `Esc` cancels |
+| Marker | `M` | wide, semi-transparent highlighter |
+| Blur | `B` | pixelates a rectangle, for hiding secrets |
+
+| Action | Input |
+|---|---|
+| Colour | `1`–`7` or the swatches (red, orange, yellow, green, blue, white, black) |
+| Stroke width | `[` / `]` or the three dots (thin, normal, thick); also sets text size and mosaic block size |
+| Undo / redo | `Ctrl+Z` / `Ctrl+Shift+Z` |
+| Deselect tool | press its key again; dragging then moves the pin as usual |
+| Leave edit mode | `Esc` or `Ctrl+E`; a second `Esc` closes the pin |
+
+Annotations are stored in image coordinates, so zooming the pin scales them
+along with the image. The border turns blue while editing.
 
 ## Requirements
 
