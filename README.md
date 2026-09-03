@@ -8,7 +8,7 @@ floating above everything.
 Move it around, zoom it with the mouse wheel, fade it, copy or save it. A copy of
 every snip also lands in the clipboard.
 
-> [!WARNING]
+> [!NOTE]
 > **This tool was written mostly by an AI.** Nearly all of the code was produced
 > by Claude Code (Anthropic's coding agent) under my direction. I read and test
 > what it writes and use the tool daily, but nobody has audited it. It works on
