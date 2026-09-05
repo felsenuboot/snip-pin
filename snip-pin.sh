@@ -140,9 +140,12 @@ else
         pid_detect=$!
     fi
 
-    ws=$(hyprctl activeworkspace -j | jq '.id')
-    rects=$(hyprctl clients -j | jq -r --argjson ws "$ws" '
-        .[] | select(.workspace.id == $ws and .mapped and (.hidden | not))
+    # Windows on every monitor's visible workspace (plus an open special
+    # workspace), since slurp spans all outputs; `activeworkspace` alone would
+    # cover only the focused monitor.
+    ids=$(hyprctl monitors -j | jq -c '[.[] | .activeWorkspace.id, .specialWorkspace.id] | map(select(. != 0))')
+    rects=$(hyprctl clients -j | jq -r --argjson ids "$ids" '
+        .[] | select((.workspace.id as $w | $ids | index($w)) != null and .mapped and (.hidden | not))
             | "\(.at[0]),\(.at[1]) \(.size[0])x\(.size[1])"')
 
     # Right-click aborts the selection. slurp treats every mouse button alike,
