@@ -268,7 +268,7 @@ class Pin(Gtk.ApplicationWindow):
         self.pos = pos
         self.pixbuf = pixbuf
         self.iw, self.ih = self.pixbuf.get_width(), self.pixbuf.get_height()
-        self.scale = 1.0
+        self.scale = max(1.0, self.min_scale())        # tiny snips open enlarged, uniformly
         self.opacity = 1.0
         # annotation state
         self.tool = None
