@@ -160,3 +160,22 @@ def test_corrupt_double_tap_state_is_ignored(tmp_path):
     r = run([], env)
     assert r.returncode == 0 and "syntax" not in r.stderr and "error" not in r.stderr.lower()
     wait_for(tmp_path / "viewer.log")
+
+
+def test_abort_ends_only_our_slurp(tmp_path):
+    import signal
+    import subprocess as sp
+    env = make_env(tmp_path)
+    state = tmp_path / "run" / "snip-pin"
+    state.mkdir(parents=True)
+    # a process that is not slurp, recorded under our PID file: must survive
+    other = sp.Popen(["sleep", "30"])
+    try:
+        (state / "slurp").write_text(f"{other.pid}\n")
+        assert run(["abort"], env).returncode == 0
+        assert other.poll() is None
+    finally:
+        other.send_signal(signal.SIGTERM)
+    # no state file at all: still a clean exit
+    (state / "slurp").unlink()
+    assert run(["abort"], env).returncode == 0

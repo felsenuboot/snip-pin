@@ -16,6 +16,7 @@
 #   snip-pin.sh clipboard  pin the image in the clipboard
 #   snip-pin.sh pin FILE   pin an image file, centred (used by the history picker)
 #   snip-pin.sh clear      empty the history (kept snips stay)
+#   snip-pin.sh abort      end the selection this script started (right-click bind)
 #   snip-pin.sh --version  print the version
 # Pressing the snip key twice within SNIP_PIN_TAP_MS (default 300) aborts the
 # selection the first press started and opens the history instead.
@@ -45,6 +46,14 @@ mkdir -p "$CACHE/kept" "$STATE"
 find "$CACHE" -maxdepth 2 -name '*_annotated.png' -delete 2>/dev/null
 
 notify() { command -v notify-send >/dev/null && notify-send -i camera-photo-symbolic -t 2000 "Snip" "$1"; }
+
+# End our own slurp (its PID is in the state file), never somebody else's.
+abort_selection() {
+    local pid
+    [[ -r "$STATE/slurp" ]] && read -r pid < "$STATE/slurp" || return 1
+    [[ "$pid" =~ ^[0-9]+$ && "$(cat "/proc/$pid/comm" 2>/dev/null)" == slurp ]] || return 1
+    kill "$pid" 2>/dev/null
+}
 
 # Pin a cached file; the position comes from its name when present. All pins
 # live in one pin-view.py process: a running one takes the file over a socket
@@ -92,12 +101,14 @@ case "${1:-}" in
                && [[ "$other" =~ ^[0-9]+$ && "$started" =~ ^[0-9]+$ ]] \
                && kill -0 "$other" 2>/dev/null && (( now - started < TAP_MS )); then
                 touch "$STATE/abort"
-                pkill -x slurp; sleep 0.05; pkill -x slurp
+                abort_selection; sleep 0.05; abort_selection     # slurp may start in between
                 exec "$0" history
             fi
             rm -f "$STATE/abort"
             echo "$$ $now" > "$STATE/selecting"
         fi ;;
+    abort)
+        abort_selection; exit 0 ;;
     --version|-V)
         cat "$HERE/VERSION"; exit 0 ;;
     *)  echo "usage: snip-pin.sh [last|history|clipboard|pin FILE|clear|--version]" >&2
@@ -115,7 +126,7 @@ else
     elems='' pid_detect='' pid_freeze='' lua_cfg=''
     cleanup() {
         [[ -n "$pid_freeze" ]] && kill "$pid_freeze" 2>/dev/null
-        rm -f "$elems" "$STATE/selecting" "$STATE/abort"
+        rm -f "$elems" "$STATE/selecting" "$STATE/abort" "$STATE/slurp"
         if [[ -n "$lua_cfg" ]]; then
             hyprctl eval 'hl.unbind("mouse:274")' >/dev/null 2>&1
         else
@@ -135,11 +146,13 @@ else
             | "\(.at[0]),\(.at[1]) \(.size[0])x\(.size[1])"')
 
     # Right-click aborts the selection. slurp treats every mouse button alike,
-    # so a temporary Hyprland bind swallows the press and ends slurp instead.
+    # so a temporary Hyprland bind swallows the press and runs `abort`, which
+    # ends our slurp by PID (not every slurp on the system).
     # Hyprland with a Lua config rejects `keyword`; it takes `eval` instead.
-    if hyprctl keyword bind ", mouse:274, exec, pkill -x slurp" 2>&1 | grep -q non-legacy; then
+    abort_cmd="$HERE/snip-pin.sh abort"
+    if hyprctl keyword bind ", mouse:274, exec, $abort_cmd" 2>&1 | grep -q non-legacy; then
         lua_cfg=1
-        hyprctl eval 'hl.bind("mouse:274", hl.dsp.exec_cmd("pkill -x slurp"))' >/dev/null 2>&1
+        hyprctl eval "hl.bind(\"mouse:274\", hl.dsp.exec_cmd(\"$abort_cmd\"))" >/dev/null 2>&1
     fi
 
     if command -v hyprpicker >/dev/null; then
@@ -150,9 +163,15 @@ else
     [[ -n "$pid_detect" ]] && wait "$pid_detect"
     [[ -e "$STATE/abort" ]] && exit 0            # second tap arrived meanwhile
     # slurp highlights the smallest rectangle under the pointer, so elements
-    # inside a window win over the window itself
-    geom=$(printf '%s\n' "$rects" | cat - "$elems" | slurp -b "#00000080" -c "#888888ff" -w 1 -f "%wx%h+%x+%y")
+    # inside a window win over the window itself. It runs in the background so
+    # its PID can be recorded for `abort`.
+    geom_file=$(mktemp)
+    printf '%s\n' "$rects" | cat - "$elems" | slurp -b "#00000080" -c "#888888ff" -w 1 -f "%wx%h+%x+%y" > "$geom_file" &
+    echo $! > "$STATE/slurp"
+    wait $!
     rc=$?
+    geom=$(<"$geom_file")
+    rm -f "$geom_file"
     cleanup
     trap - EXIT
     [[ $rc -ne 0 || -z "$geom" ]] && exit 0
