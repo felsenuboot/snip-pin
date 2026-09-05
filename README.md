@@ -90,9 +90,9 @@ windowrulev2 = noborder, class:^(snip-pin)$
 windowrulev2 = rounding 0, class:^(snip-pin)$
 ```
 
-The placement call uses the Lua dispatcher syntax; on Hyprland releases older
-than 0.56 replace `hl.dsp.window.move(...)` in `pin-view.py` with
-`movewindowpixel exact X Y,address:...`.
+Placement works with both the Lua (0.56+) and the classic dispatcher syntax;
+the viewer tries the Lua form first and remembers which one the compositor
+accepted.
 
 </details>
 
