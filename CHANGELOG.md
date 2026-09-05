@@ -9,6 +9,7 @@ layout) may still change.
 ## [Unreleased]
 
 ### Fixed
+- Thin snips (a single line of text) are no longer stretched to 40 px: the minimum size applies to the scale, not to each side, and annotations on such pins land where the pointer is (#8).
 - Two pins saved within the same second no longer overwrite each other (`pin_..._2.png`), and a save that fails (unwritable folder, full disk) shows the error and keeps the pin open instead of dying with a traceback (#10).
 - A missing, truncated or non-image file (a snip deleted before `last`, a bad clipboard image, `pin FILE` on a text file) shows a "Cannot open" toast instead of crashing the viewer silently and making the next pin wait three seconds (#7).
 - Copying or saving an annotated pin no longer leaves a `_annotated.png` next to the original: in the cache (where the history picker and `last` picked it up), in `kept/` (where it never expired) or in the user's folder for `pin FILE`. Leftovers from earlier versions are cleaned up and ignored (#5).
