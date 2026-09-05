@@ -9,6 +9,7 @@ layout) may still change.
 ## [Unreleased]
 
 ### Added
+- Image files dropped onto a pin open as new pins; together with the *Open with → Pin image* entry from 0.1.0 this closes #33.
 - Ellipse tool (`E`) and numbered-step counter (`N`): a click places a badge with the next number; undo takes the number back (#31).
 
 ## [0.2.0] – 2026-09-06
