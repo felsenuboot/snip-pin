@@ -23,7 +23,7 @@ around, zoom it, fade it, annotate it, copy or save it.
 | Snap to windows and elements | Annotate on the pin |
 |---|---|
 | ![Selection: the image under the pointer is highlighted](docs/select.png) | ![A pin with rectangle, arrow, text and blur annotations and the toolbar](docs/pin.png) |
-| Windows and the rectangles inside them (images, cards, panels) highlight under the pointer. A click snaps to one, a drag selects freely, right-click or `Esc` aborts. | The pin is the editor: rectangle, arrow, pen, text, marker and blur, baked into what you copy or save. The file on disk stays untouched. |
+| Windows and the rectangles inside them (images, cards, panels) highlight under the pointer. A click snaps to one, a drag selects freely, right-click or `Esc` aborts. | The pin is the editor: rectangle, ellipse, arrow, pen, text, numbered steps, marker and blur, baked into what you copy or save. The file on disk stays untouched. |
 
 - **Pins stay put.** Every snip opens as a floating, pinned window at the
   capture position and shows up in the dock like any other window.
@@ -116,9 +116,11 @@ draw with the left mouse button; with no tool selected the pin moves as usual.
 | Tool | Key | Notes |
 |---|---|---|
 | Rectangle | `R` | outline |
+| Ellipse | `E` | outline, drag the bounding box |
 | Arrow | `A` | drag from tail to head |
 | Pen | `P` | freehand |
 | Text | `T` | click to place, type, `Enter` commits |
+| Counter | `N` | click to place a numbered badge: 1, 2, 3 …; undo takes the number back |
 | Marker | `M` | wide, semi-transparent highlighter |
 | Blur | `B` | pixelates a rectangle, for hiding secrets |
 
