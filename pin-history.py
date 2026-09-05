@@ -51,7 +51,9 @@ def snips(cache):
     files = []
     for d in (cache, os.path.join(cache, "kept")):
         if os.path.isdir(d):
-            files += [os.path.join(d, f) for f in os.listdir(d) if f.endswith(".png")]
+            # *_annotated.png: baked copies that versions before 0.1.0 left next to the original
+            files += [os.path.join(d, f) for f in os.listdir(d)
+                      if f.endswith(".png") and not f.endswith("_annotated.png")]
     return sorted(files, key=os.path.getmtime, reverse=True)
 
 
