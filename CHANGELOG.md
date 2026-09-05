@@ -14,6 +14,7 @@ Every monitor, scaled outputs, and the robustness items from the review;
 all changes verified on Hyprland 0.56.2 except the HiDPI one.
 
 ### Added
+- `docs/decisions.md`: measurements and the decisions on a Rust rewrite, GNOME and macOS ports, layer shell and Python (#25, #26, #27).
 - `snip-pin.sh doctor` lists the required and optional tools, the GTK, numpy and Hyprland versions and the config style; `install.sh` runs it at the end (#24).
 - `snip-pin.sh clipboard` pins JPEG, WebP, BMP, GIF and TIFF clipboard images and copied image files (`text/uri-list`), not only PNG; they are converted into the cache as PNG (#17).
 - `SNIP_PIN_SAVE_DIR` chooses the save folder; without it the XDG pictures directory (localised) is used after the ML4W setting (#16).
@@ -27,9 +28,6 @@ all changes verified on Hyprland 0.56.2 except the HiDPI one.
 - Window snapping offers the windows on every monitor's visible workspace (and an open special workspace), not only the focused monitor's (#14).
 - Right-click and the double tap end only the slurp that snip-pin started (by PID, through the new `abort` subcommand), not every slurp on the system (#20).
 - `snip-pin.sh` validates `SNIP_PIN_KEEP_DAYS` and `SNIP_PIN_TAP_MS` (non-numbers fall back to the defaults instead of bash errors), tolerates a corrupt double-tap state file, runs under `set -u -o pipefail`, and cannot leak its temp file on an early exit (#23).
-
-### Added
-- `docs/decisions.md`: measurements and the decisions on a Rust rewrite, GNOME and macOS ports, layer shell and Python (#25, #26, #27).
 
 ## [0.1.0] – 2026-09-06
 
