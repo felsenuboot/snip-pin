@@ -8,6 +8,9 @@ layout) may still change.
 
 ## [Unreleased]
 
+### Added
+- `SNIP_PIN_SAVE_DIR` chooses the save folder; without it the XDG pictures directory (localised) is used after the ML4W setting (#16).
+
 ### Fixed
 - Window snapping offers the windows on every monitor's visible workspace (and an open special workspace), not only the focused monitor's (#14).
 - Right-click and the double tap end only the slurp that snip-pin started (by PID, through the new `abort` subcommand), not every slurp on the system (#20).

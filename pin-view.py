@@ -128,15 +128,19 @@ def unique_path(folder, stem, ext):
     return p
 
 def screenshot_folder():
-    p = os.path.expanduser("~/.config/ml4w/settings/screenshot-folder")
+    """Where Ctrl+S saves: $SNIP_PIN_SAVE_DIR, the ML4W setting, the XDG pictures dir, ~/Pictures."""
+    d = os.environ.get("SNIP_PIN_SAVE_DIR", "").strip()
+    if d:
+        return os.path.expandvars(os.path.expanduser(d))
     try:
-        with open(p) as f:
+        with open(os.path.expanduser("~/.config/ml4w/settings/screenshot-folder")) as f:
             d = os.path.expandvars(os.path.expanduser(f.read().strip()))
             if d:
                 return d
     except OSError:
         pass
-    return os.path.expanduser("~/Pictures")
+    d = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_PICTURES)   # xdg-user-dirs, localised
+    return d or os.path.expanduser("~/Pictures")
 
 # ---- annotation rendering (pure cairo, image coordinates) ----------------
 # An op is a dict: kind, pts [(x, y), ...], color (r, g, b), width, text.
