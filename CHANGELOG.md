@@ -8,6 +8,9 @@ layout) may still change.
 
 ## [Unreleased]
 
+### Added
+- Ellipse tool (`E`) and numbered-step counter (`N`): a click places a badge with the next number; undo takes the number back (#31).
+
 ## [0.2.0] – 2026-09-06
 
 Every monitor, scaled outputs, and the robustness items from the review;

@@ -84,7 +84,9 @@ def test_render_png_bakes_ops_at_native_size(tmp_path, view):
            {"kind": "pen", "pts": [(10, 60), (30, 65), (50, 60)], "color": red, "width": 2, "text": ""},
            {"kind": "marker", "pts": [(10, 20), (100, 20)], "color": red, "width": 4, "text": ""},
            {"kind": "text", "pts": [(10, 50)], "color": red, "width": 4, "text": "hi"},
-           {"kind": "blur", "pts": [(70, 40), (110, 75)], "color": red, "width": 4, "text": ""}]
+           {"kind": "blur", "pts": [(70, 40), (110, 75)], "color": red, "width": 4, "text": ""},
+           {"kind": "ellipse", "pts": [(60, 10), (110, 40)], "color": red, "width": 2, "text": ""},
+           {"kind": "counter", "pts": [(100, 60)], "color": red, "width": 4, "text": "", "n": 7}]
     out = tmp_path / "out.png"
     assert view.render_png(pb, ops, str(out)) == str(out)
     assert png_size(str(out)) == (120, 80)
@@ -97,6 +99,9 @@ def test_render_png_bakes_ops_at_native_size(tmp_path, view):
         return tuple(px[o:o + 3])
     assert at(10, 25) == (255, 0, 0)          # on the rectangle's left edge
     assert at(90, 5) == (255, 255, 255)       # untouched corner stays white
+    assert at(85, 10) == (255, 0, 0)          # top of the ellipse (centre 85,25, ry 15)
+    assert at(85, 36) == (255, 255, 255)      # inside the ellipse, clear of the marker: an outline
+    assert at(89, 60) == (255, 0, 0)          # inside the badge (radius 14), clear of the digit
 
 
 def test_mosaic_pixbuf_clips_to_the_image(tmp_path, view):
@@ -260,3 +265,13 @@ def test_output_scale(view):
     assert view.output_scale(MONS, None) == 1.0
     assert view.output_scale(None, (5, 5)) == 1.0
     assert view.output_scale([{"x": 0, "y": 0, "width": 100, "height": 100, "scale": 0}], (1, 1)) == 1.0
+
+
+def test_degenerate_ellipse_and_counter_do_not_raise(tmp_path, view):
+    from gi.repository import GdkPixbuf
+    src = tmp_path / "s.png"
+    make_png(str(src), 40, 40)
+    pb = GdkPixbuf.Pixbuf.new_from_file(str(src))
+    ops = [{"kind": "ellipse", "pts": [(5, 5), (5, 30)], "color": (0, 0, 1), "width": 2, "text": ""},
+           {"kind": "counter", "pts": [(-5, 50)], "color": (0, 0, 0), "width": 7, "text": ""}]   # no "n": defaults to 1
+    view.render_png(pb, ops, str(tmp_path / "o.png"))

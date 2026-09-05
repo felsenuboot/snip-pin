@@ -10,7 +10,8 @@ usage: pin-view.py IMAGE [X Y]
   right-click    copy image & close        middle-click  menu
 
 Annotations (toolbar under the pin while the pointer hovers it, or keys):
-  R rectangle   A arrow   P pen   T text   M marker   B blur (mosaic)
+  R rectangle   E ellipse   A arrow   P pen   T text   M marker   B blur (mosaic)
+  N counter (click: 1, 2, 3 ...)
   1-7 colour    [ ] stroke width    Ctrl+Z / Ctrl+Shift+Z undo / redo
   With a tool selected, left-drag draws; press its key again (or Esc) to
   deselect. Copy and save bake the annotations into the image.
@@ -89,13 +90,16 @@ COLORS = [("red", "#e5312b"), ("orange", "#ff8c1a"), ("yellow", "#ffd21f"),
           ("green", "#2fbf4f"), ("blue", "#2f7fe5"), ("white", "#ffffff"),
           ("black", "#000000")]
 WIDTHS = [("thin", 2), ("normal", 4), ("thick", 7)]      # stroke width in image px
-TOOLS = [("rect", "R", "Rect", "Rectangle outline"), ("arrow", "A", "Arrow", "Arrow"),
-         ("pen", "P", "Pen", "Freehand pen"), ("text", "T", "Text", "Text: click, type, Enter"),
+TOOLS = [("rect", "R", "Rect", "Rectangle outline"), ("ellipse", "E", "Ellipse", "Ellipse outline"),
+         ("arrow", "A", "Arrow", "Arrow"), ("pen", "P", "Pen", "Freehand pen"),
+         ("text", "T", "Text", "Text: click, type, Enter"), ("counter", "N", "1 2 3", "Numbered step: click"),
          ("marker", "M", "Mark", "Highlighter"), ("blur", "B", "Blur", "Mosaic (hide secrets)")]
+CLICK_TOOLS = ("text", "counter")                  # placed with a click, not a drag
 TOOL_KEYS = {k.lower(): t for t, k, _, _ in TOOLS}
 MARKER_ALPHA = 0.4
 MARKER_FACTOR = 3.5                                # marker stroke = width * factor
 TEXT_PX = {2: 16, 4: 22, 7: 30}                    # font size per stroke width
+COUNTER_R = {2: 11, 4: 14, 7: 18}                  # counter badge radius per stroke width
 MOSAIC_PX = {2: 5, 4: 9, 7: 14}                    # block size per stroke width
 TOOLBAR_HIDE_MS = 300                              # grace period after the pointer leaves
 SMOOTH_STEP = 30.0                                 # touchpad scroll units per zoom/opacity step
@@ -288,6 +292,32 @@ def draw_op(cr, pixbuf, op, caret=False):
         cr.set_line_join(cairo.LINE_JOIN_MITER)
         cr.rectangle(x0, y0, x1 - x0, y1 - y0)
         cr.stroke()
+    elif k == "ellipse":
+        x0, y0, x1, y1 = norm_rect(pts)
+        rx, ry = (x1 - x0) / 2, (y1 - y0) / 2
+        if rx >= 0.5 and ry >= 0.5:
+            cr.save()
+            cr.translate(x0 + rx, y0 + ry)
+            cr.scale(rx, ry)
+            cr.arc(0, 0, 1, 0, 2 * math.pi)
+            cr.restore()                              # the pen width must not scale with the ellipse
+            cr.set_source_rgb(r, g, b)
+            cr.set_line_width(w)
+            cr.stroke()
+    elif k == "counter":
+        x, y = pts[0]
+        rad = COUNTER_R.get(w, 14)
+        cr.set_source_rgb(r, g, b)
+        cr.arc(x, y, rad, 0, 2 * math.pi)
+        cr.fill()
+        layout = PangoCairo.create_layout(cr)
+        layout.set_font_description(Pango.FontDescription.from_string(f"Sans Bold {int(rad * 1.2)}px"))
+        layout.set_text(str(op.get("n", 1)), -1)
+        _, logical = layout.get_pixel_extents()
+        dark = (0.299 * r + 0.587 * g + 0.114 * b) < 0.5
+        cr.set_source_rgb(1, 1, 1) if dark else cr.set_source_rgb(0, 0, 0)
+        cr.move_to(x - logical.width / 2 - logical.x, y - logical.height / 2 - logical.y)
+        PangoCairo.show_layout(cr, layout)
     elif k == "arrow":
         (x0, y0), (x1, y1) = pts[0], pts[-1]
         length = math.hypot(x1 - x0, y1 - y0)
@@ -620,7 +650,7 @@ class Pin(Gtk.ApplicationWindow):
             self.remove_css_class("editing")
         else:
             self.add_css_class("editing")
-        cursor = {None: None, "text": "text"}.get(tool, "crosshair")
+        cursor = {None: None, "text": "text", "counter": "pointer"}.get(tool, "crosshair")
         self.area.set_cursor(Gdk.Cursor.new_from_name(cursor) if cursor else None)
         self.sync_toolbar()
 
@@ -652,6 +682,9 @@ class Pin(Gtk.ApplicationWindow):
 
     def new_op(self, kind, p):
         return {"kind": kind, "pts": [p], "color": self.color, "width": self.width, "text": ""}
+
+    def next_counter(self):
+        return 1 + sum(1 for op in self.ops if op["kind"] == "counter")
 
     # ---- toolbar --------------------------------------------------------
     def build_toolbar(self):
@@ -751,7 +784,7 @@ class Pin(Gtk.ApplicationWindow):
     # ---- input ------------------------------------------------------------
     def on_drag_begin(self, gesture, x, y):
         self.moving = False
-        if self.tool in (None, "text"):
+        if self.tool is None or self.tool in CLICK_TOOLS:
             return
         self.pending = self.new_op(self.tool, self.to_img(x, y))
         self.area.queue_draw()
@@ -785,7 +818,7 @@ class Pin(Gtk.ApplicationWindow):
             return
         if len(op["pts"]) < 2:                                # a tap draws nothing
             self.area.queue_draw(); return
-        if op["kind"] in ("rect", "arrow", "blur"):
+        if op["kind"] in ("rect", "ellipse", "arrow", "blur"):
             (x0, y0), (x1, y1) = op["pts"]
             if math.hypot(x1 - x0, y1 - y0) < 3:
                 self.area.queue_draw(); return
@@ -799,6 +832,10 @@ class Pin(Gtk.ApplicationWindow):
             self.typing = self.new_op("text", self.to_img(x, y))
             self.sync_toolbar()
             self.area.queue_draw()
+        elif self.tool == "counter" and n == 1:
+            op = self.new_op("counter", self.to_img(x, y))
+            op["n"] = self.next_counter()             # undo takes the number back with the badge
+            self.push(op)
 
     def on_menu(self, gesture, n, x, y):
         self.menu.set_pointing_to(Gdk.Rectangle(x=int(x), y=int(y), width=1, height=1))
