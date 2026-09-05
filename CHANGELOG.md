@@ -8,6 +8,10 @@ layout) may still change.
 
 ## [Unreleased]
 
+## [0.3.0] – 2026-09-06
+
+The editor milestone: every item verified live on Hyprland 0.56.2 with input injection.
+
 ### Added
 - The text tool takes its input through a GTK input-method context: dead keys, the Compose key and ibus/fcitx input methods (CJK, emoji pickers) work, composing text is shown while typing, and `Ctrl+V` pastes (#30).
 - Crop tool (`C`): drag the part to keep, `Enter` applies, `Esc` cancels. Undo restores the full image; the pin shrinks in place so the kept part stays where it was (#32).
@@ -86,6 +90,7 @@ the issues below and fixed the ones in this milestone.
 - A JPEG or WebP opened with `pin FILE` is re-encoded as PNG when copied or
   saved; before, the raw file was sent to the clipboard labelled `image/png`.
 
-[Unreleased]: https://github.com/felsenuboot/snip-pin/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/felsenuboot/snip-pin/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/felsenuboot/snip-pin/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/felsenuboot/snip-pin/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/felsenuboot/snip-pin/releases/tag/v0.1.0
