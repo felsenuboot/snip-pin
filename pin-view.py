@@ -11,7 +11,7 @@ usage: pin-view.py IMAGE [X Y]
 
 Annotations (toolbar under the pin while the pointer hovers it, or keys):
   R rectangle   E ellipse   A arrow   P pen   T text   M marker   B blur (mosaic)
-  N counter (click: 1, 2, 3 ...)
+  N counter (click: 1, 2, 3 ...)   C crop (drag, Enter applies, Esc cancels; undoable)
   1-7 colour    [ ] stroke width    Ctrl+Z / Ctrl+Shift+Z undo / redo
   With a tool selected, left-drag draws; press its key again (or Esc) to
   deselect. Copy and save bake the annotations into the image.
@@ -93,7 +93,8 @@ WIDTHS = [("thin", 2), ("normal", 4), ("thick", 7)]      # stroke width in image
 TOOLS = [("rect", "R", "Rect", "Rectangle outline"), ("ellipse", "E", "Ellipse", "Ellipse outline"),
          ("arrow", "A", "Arrow", "Arrow"), ("pen", "P", "Pen", "Freehand pen"),
          ("text", "T", "Text", "Text: click, type, Enter"), ("counter", "N", "1 2 3", "Numbered step: click"),
-         ("marker", "M", "Mark", "Highlighter"), ("blur", "B", "Blur", "Mosaic (hide secrets)")]
+         ("marker", "M", "Mark", "Highlighter"), ("blur", "B", "Blur", "Mosaic (hide secrets)"),
+         ("crop", "C", "Crop", "Crop: drag, Enter applies, Esc cancels")]
 CLICK_TOOLS = ("text", "counter")                  # placed with a click, not a drag
 TOOL_KEYS = {k.lower(): t for t, k, _, _ in TOOLS}
 MARKER_ALPHA = 0.4
@@ -261,6 +262,25 @@ def norm_rect(pts):
     (x0, y0), (x1, y1) = pts[0], pts[-1]
     return min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)
 
+def shift_ops(ops, dx, dy):
+    """Move every annotation by (dx, dy) in image coordinates (after a crop)."""
+    for op in ops:
+        if op["kind"] == "crop":
+            continue
+        op["pts"] = [(x + dx, y + dy) for x, y in op["pts"]]
+        op.pop("_mosaic", None)                    # the cached mosaic was cut from the old pixbuf
+
+
+def crop_rect(pixbuf, pts):
+    """The crop rectangle (x0, y0, w, h) clipped to the image, or None if too small."""
+    x0, y0, x1, y1 = norm_rect(pts)
+    x0, y0 = max(0, int(round(x0))), max(0, int(round(y0)))
+    x1, y1 = min(pixbuf.get_width(), int(round(x1))), min(pixbuf.get_height(), int(round(y1)))
+    if x1 - x0 < 4 or y1 - y0 < 4:
+        return None
+    return x0, y0, x1 - x0, y1 - y0
+
+
 def mosaic_pixbuf(pixbuf, op):
     x0, y0, x1, y1 = norm_rect(op["pts"])
     x0, y0 = max(0, int(x0)), max(0, int(y0))
@@ -281,6 +301,8 @@ def mosaic_pixbuf(pixbuf, op):
 
 def draw_op(cr, pixbuf, op, caret=False):
     k, pts, w = op["kind"], op["pts"], op["width"]
+    if k == "crop":
+        return                                     # an undo marker, not a drawing
     r, g, b = op["color"]
     cr.save()
     cr.set_line_cap(cairo.LINE_CAP_ROUND)
@@ -433,6 +455,8 @@ class Pin(Gtk.ApplicationWindow):
         self.redo_stack = []
         self.pending = None           # op being dragged out
         self.typing = None            # text op being typed
+        self.crop_pending = None      # (x0, y0, w, h) waiting for Enter
+        self.address = None           # Hyprland window address once known (placement, crop)
         self._syncing = False
         self.hovered = False
         self.toolbar_shown = False    # tracked ourselves: get_visible() is true during the fade-out
@@ -572,8 +596,30 @@ class Pin(Gtk.ApplicationWindow):
             draw_op(cr, self.pixbuf, self.pending)
         if self.typing is not None:
             draw_op(cr, self.pixbuf, self.typing, caret=True)
+        rect = self.crop_pending
+        if rect is None and self.pending is not None and self.pending["kind"] == "crop":
+            rect = crop_rect(self.pixbuf, self.pending["pts"])
+        if rect is not None:
+            self.draw_crop(cr, rect)
         if self.osd is not None:
             self.draw_osd(cr, w, h)
+
+    def draw_crop(self, cr, rect):
+        """Dim everything outside the crop rectangle and outline it."""
+        x0, y0, cw, ch = rect
+        cr.save()
+        cr.set_source_rgba(0, 0, 0, 0.55)
+        cr.rectangle(0, 0, self.iw, self.ih)
+        cr.rectangle(x0, y0, cw, ch)
+        cr.set_fill_rule(cairo.FILL_RULE_EVEN_ODD)
+        cr.fill()
+        cr.restore()
+        f = self.area.get_width() / self.iw or 1
+        cr.set_source_rgb(1, 1, 1)
+        cr.set_line_width(1.5 / f)
+        cr.set_dash([6 / f, 4 / f])
+        cr.rectangle(x0 + 0.5 / f, y0 + 0.5 / f, cw - 1 / f, ch - 1 / f)
+        cr.stroke()
 
     def draw_osd(self, cr, w, h):
         """Zoom / opacity readout in the corner; on screen only, never exported."""
@@ -609,32 +655,35 @@ class Pin(Gtk.ApplicationWindow):
         w = round(self.iw * self.scale) + 2 * BORDER
         h = round(self.ih * self.scale) + 2 * BORDER
         x, y = clamp_to_monitor(monitor_at(hypr_json("j/monitors"), x, y), x, y, w, h)
+        self.move_to(x, y)
+
+    def client(self):
+        """Our Hyprland client entry: by address once known, by the unique title before."""
+        for c in hypr_json("j/clients") or []:
+            if self.address:
+                if c.get("address") == self.address:
+                    return c
+            elif c.get("pid") == os.getpid() and c.get("title") == self.get_title():
+                return c
+        return None
+
+    def move_to(self, x, y, settle=6):
+        """Move the window to (x, y) and keep it there while its size settles:
+        Hyprland re-centres a floating window on every resize (after mapping,
+        after a crop), so the move is repeated until it has held for a few ticks."""
         deadline = time.time() + 2
         state = {"ok": 0}
 
-        def me():
-            for c in hypr_json("j/clients") or []:
-                if c.get("pid") == os.getpid() and c.get("title") == self.get_title():
-                    return c
-            return None
-
         def tick():
-            again = step()
-            if not again:
-                self.set_title("snip-pin")
-            return again
-
-        def step():
-            c = me()
+            c = self.client()
             if c is None:
                 return time.time() < deadline
+            self.address = c["address"]
             if list(c["at"]) == [x, y]:
-                # Hyprland re-centres a floating window when its size settles after
-                # mapping, so keep checking briefly and re-move if it drifted
                 state["ok"] += 1
-                return state["ok"] < 6 and time.time() < deadline
+                return state["ok"] < settle and time.time() < deadline
             state["ok"] = 0
-            move_window(c["address"], x, y)
+            move_window(self.address, x, y)
             return time.time() < deadline
         GLib.timeout_add(30, tick)
 
@@ -651,6 +700,8 @@ class Pin(Gtk.ApplicationWindow):
         if tool != "text":
             self.commit_text()
         self.pending = None
+        if tool != "crop":
+            self.crop_pending = None
         self.tool = tool
         if tool is None:
             self.remove_css_class("editing")
@@ -669,16 +720,53 @@ class Pin(Gtk.ApplicationWindow):
     def undo(self):
         if self.typing is not None:
             self.typing = None
+        elif self.crop_pending is not None:
+            self.crop_pending = None
         elif self.ops:
-            self.redo_stack.append(self.ops.pop())
+            op = self.ops.pop()
+            if op["kind"] == "crop":
+                self.set_pixbuf(op["pixbuf"], -op["dx"], -op["dy"])
+            self.redo_stack.append(op)
         self.sync_toolbar()
         self.area.queue_draw()
 
     def redo(self):
         if self.redo_stack:
-            self.ops.append(self.redo_stack.pop())
+            op = self.redo_stack.pop()
+            if op["kind"] == "crop":
+                x0, y0, cw, ch = op["dx"], op["dy"], op["w"], op["h"]
+                self.set_pixbuf(self.pixbuf.new_subpixbuf(x0, y0, cw, ch).copy(), x0, y0)
+            self.ops.append(op)
         self.sync_toolbar()
         self.area.queue_draw()
+
+    # ---- crop ---------------------------------------------------------------
+    def apply_crop(self):
+        rect = self.crop_pending
+        self.crop_pending = None
+        if rect is None:
+            return
+        x0, y0, cw, ch = rect
+        marker = {"kind": "crop", "pts": [], "color": self.color, "width": self.width, "text": "",
+                  "pixbuf": self.pixbuf, "dx": x0, "dy": y0, "w": cw, "h": ch}
+        self.set_pixbuf(self.pixbuf.new_subpixbuf(x0, y0, cw, ch).copy(), x0, y0)
+        self.push(marker)
+        self.set_tool(None)
+
+    def set_pixbuf(self, pixbuf, dx, dy):
+        """Swap the image for a crop (or its undo): ops move by (-dx, -dy), the
+        window shrinks or grows in place so the content stays where it was."""
+        shift_ops(self.ops, -dx, -dy)
+        shift_ops(self.redo_stack, -dx, -dy)
+        self.pixbuf = pixbuf
+        self.iw, self.ih = pixbuf.get_width(), pixbuf.get_height()
+        self.scale = max(self.scale, self.min_scale())
+        # the target is fixed before the resize: Hyprland re-centres on resize
+        # and move_to() puts the window back until the new size has settled
+        c = self.client() if self.address else None
+        self.apply_scale()
+        if c is not None:
+            self.move_to(c["at"][0] + round(dx * self.scale), c["at"][1] + round(dy * self.scale))
 
     def commit_text(self):
         op, self.typing = self.typing, None
@@ -756,7 +844,7 @@ class Pin(Gtk.ApplicationWindow):
                 b.add_css_class("sel")
         for i, b in enumerate(self.width_btns):
             b.set_active(i == self.width_idx)
-        self.undo_btn.set_sensitive(bool(self.ops) or self.typing is not None)
+        self.undo_btn.set_sensitive(bool(self.ops) or self.typing is not None or self.crop_pending is not None)
         self.redo_btn.set_sensitive(bool(self.redo_stack))
         self._syncing = False
 
@@ -824,10 +912,15 @@ class Pin(Gtk.ApplicationWindow):
             return
         if len(op["pts"]) < 2:                                # a tap draws nothing
             self.area.queue_draw(); return
-        if op["kind"] in ("rect", "ellipse", "arrow", "blur"):
+        if op["kind"] in ("rect", "ellipse", "arrow", "blur", "crop"):
             (x0, y0), (x1, y1) = op["pts"]
             if math.hypot(x1 - x0, y1 - y0) < 3:
                 self.area.queue_draw(); return
+        if op["kind"] == "crop":
+            self.crop_pending = crop_rect(self.pixbuf, op["pts"])
+            self.sync_toolbar()
+            self.area.queue_draw()
+            return
         self.push(op)
 
     def on_click(self, gesture, n, x, y):
@@ -887,11 +980,15 @@ class Pin(Gtk.ApplicationWindow):
                 self.typing["text"] += chr(u); self.area.queue_draw(); return True
             return True
         if keyval == Gdk.KEY_Escape:
-            if self.tool is not None:
+            if self.crop_pending is not None:
+                self.crop_pending = None; self.sync_toolbar(); self.area.queue_draw()
+            elif self.tool is not None:
                 self.set_tool(None)
             else:
                 self.close()
             return True
+        if keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter) and self.crop_pending is not None:
+            self.apply_crop(); return True
         if ctrl_held:
             if keyval in (Gdk.KEY_c, Gdk.KEY_C):
                 self.copy(); return True
@@ -940,12 +1037,13 @@ class Pin(Gtk.ApplicationWindow):
         original would litter the cache (and the history) or the user's own
         folder for `pin FILE`.
         """
-        ops = list(self.ops)
+        ops = [op for op in self.ops if op["kind"] != "crop"]
+        cropped = any(op["kind"] == "crop" for op in self.ops)
         if self.typing is not None and self.typing["text"].strip():
             ops.append(self.typing)
         # the clipboard and the save folder always get PNG: a JPEG opened via
         # "pin FILE" must be re-encoded even without annotations
-        if not ops and self.path.lower().endswith(".png"):
+        if not ops and not cropped and self.path.lower().endswith(".png"):
             return self.path, False
         fd, tmp = tempfile.mkstemp(prefix="snip-pin-", suffix=".png", dir=RUNTIME_DIR)
         os.close(fd)
