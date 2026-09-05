@@ -138,6 +138,95 @@ def scroll_steps(wheel, dy, acc):
     steps = int(acc / SMOOTH_STEP)
     return steps, acc - steps * SMOOTH_STEP
 
+# ---- Hyprland IPC -----------------------------------------------------------
+# Requests go straight to Hyprland's socket (0.2 ms) instead of spawning
+# hyprctl (10 ms): the placement loop runs on the GTK main loop and must not
+# stall the first frames of a pin.
+HYPR_SOCKET = None
+_sig = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE")
+if _sig:
+    for base in (os.environ.get("XDG_RUNTIME_DIR"), "/tmp"):
+        if base and os.path.exists(os.path.join(base, "hypr", _sig, ".socket.sock")):
+            HYPR_SOCKET = os.path.join(base, "hypr", _sig, ".socket.sock")
+            break
+
+
+def hypr(cmd):
+    """One request to Hyprland ('j/clients', 'dispatch ...'); '' when unavailable."""
+    if HYPR_SOCKET:
+        s = socket.socket(socket.AF_UNIX)
+        s.settimeout(1)
+        try:
+            s.connect(HYPR_SOCKET)
+            s.sendall(cmd.encode())
+            buf = b""
+            while True:
+                chunk = s.recv(65536)
+                if not chunk:
+                    break
+                buf += chunk
+            return buf.decode(errors="replace")
+        except OSError:
+            return ""
+        finally:
+            s.close()
+    try:
+        argv = ["hyprctl"] + (["-j", cmd[2:]] if cmd.startswith("j/") else cmd.split(" ", 1))
+        return subprocess.run(argv, capture_output=True, text=True, timeout=2).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def hypr_json(cmd):
+    try:
+        return json.loads(hypr(cmd) or "null")
+    except ValueError:
+        return None
+
+
+_move_syntax = None            # "lua" (0.56+ with a Lua config) or "classic", found on first use
+
+
+def move_window(address, x, y):
+    """Move a window to an exact position, with whichever dispatcher syntax this Hyprland takes."""
+    global _move_syntax
+    forms = {"lua": f"dispatch hl.dsp.window.move({{ x = {x}, y = {y}, exact = true, window = 'address:{address}' }})",
+             "classic": f"dispatch movewindowpixel exact {x} {y},address:{address}"}
+    order = [_move_syntax] if _move_syntax else ["lua", "classic"]
+    for name in order:
+        if hypr(forms[name]).strip() == "ok":
+            _move_syntax = name
+            return True
+    return False
+
+
+def monitor_at(monitors, x, y):
+    """The monitor dict whose logical rectangle contains (x, y), else the first, else None."""
+    for m in monitors or []:
+        mx, my = m.get("x", 0), m.get("y", 0)
+        scale = m.get("scale") or 1
+        mw, mh = m.get("width", 0) / scale, m.get("height", 0) / scale
+        if m.get("transform", 0) in (1, 3, 5, 7):
+            mw, mh = mh, mw
+        if mx <= x < mx + mw and my <= y < my + mh:
+            return m
+    return monitors[0] if monitors else None
+
+
+def clamp_to_monitor(monitor, x, y, w, h):
+    """Shift (x, y) so a w x h window stays inside the monitor's logical area."""
+    if not monitor:
+        return x, y
+    mx, my = monitor.get("x", 0), monitor.get("y", 0)
+    scale = monitor.get("scale") or 1
+    mw, mh = monitor.get("width", 0) / scale, monitor.get("height", 0) / scale
+    if monitor.get("transform", 0) in (1, 3, 5, 7):
+        mw, mh = mh, mw
+    x = max(mx, min(x, mx + mw - w)) if w <= mw else mx
+    y = max(my, min(y, my + mh - h)) if h <= mh else my
+    return int(round(x)), int(round(y))
+
+
 def unique_path(folder, stem, ext):
     """folder/stem.ext, or stem_2.ext, stem_3.ext ... if that exists already."""
     p = os.path.join(folder, stem + ext)
@@ -469,16 +558,14 @@ class Pin(Gtk.ApplicationWindow):
         if self.pos is None:
             return
         x, y = self.pos[0] - BORDER, self.pos[1] - BORDER   # keep the image itself at pos
+        w = round(self.iw * self.scale) + 2 * BORDER
+        h = round(self.ih * self.scale) + 2 * BORDER
+        x, y = clamp_to_monitor(monitor_at(hypr_json("j/monitors"), x, y), x, y, w, h)
         deadline = time.time() + 2
-        state = {"addr": None, "ok": 0}
+        state = {"ok": 0}
 
         def me():
-            try:
-                clients = json.loads(subprocess.run(["hyprctl", "clients", "-j"],
-                                                    capture_output=True, text=True).stdout)
-            except Exception:
-                return None
-            for c in clients:
+            for c in hypr_json("j/clients") or []:
                 if c.get("pid") == os.getpid() and c.get("title") == self.get_title():
                     return c
             return None
@@ -499,9 +586,7 @@ class Pin(Gtk.ApplicationWindow):
                 state["ok"] += 1
                 return state["ok"] < 6 and time.time() < deadline
             state["ok"] = 0
-            subprocess.run(["hyprctl", "dispatch",
-                f"hl.dsp.window.move({{ x = {x}, y = {y}, exact = true, window = 'address:{c['address']}' }})"],
-                capture_output=True)
+            move_window(c["address"], x, y)
             return time.time() < deadline
         GLib.timeout_add(30, tick)
 

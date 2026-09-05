@@ -208,3 +208,47 @@ def test_read_request_validates(view):
     assert view.read_request(a) is None
     assert view.read_request(a, timeout=0.05) is None          # nothing pending: bounded wait
     a.close(); b.close()
+
+
+MONS = [{"name": "A", "x": 0, "y": 0, "width": 3440, "height": 1440, "scale": 1, "transform": 0},
+        {"name": "B", "x": 3440, "y": 0, "width": 3840, "height": 2160, "scale": 2, "transform": 0},
+        {"name": "C", "x": -1080, "y": 0, "width": 1920, "height": 1080, "scale": 1, "transform": 1}]
+
+
+def test_monitor_at(view):
+    assert view.monitor_at(MONS, 100, 100)["name"] == "A"
+    assert view.monitor_at(MONS, 3500, 100)["name"] == "B"          # 1920x1080 logical at scale 2
+    assert view.monitor_at(MONS, 5400, 1000)["name"] == "A"         # outside B's logical area: first
+    assert view.monitor_at(MONS, -500, 1500)["name"] == "C"         # rotated: 1080 wide, 1920 tall
+    assert view.monitor_at([], 0, 0) is None and view.monitor_at(None, 0, 0) is None
+
+
+def test_clamp_to_monitor(view):
+    assert view.clamp_to_monitor(MONS[0], 100, 100, 400, 300) == (100, 100)
+    assert view.clamp_to_monitor(MONS[0], 3300, 1300, 400, 300) == (3040, 1140)
+    assert view.clamp_to_monitor(MONS[0], -50, -50, 400, 300) == (0, 0)
+    assert view.clamp_to_monitor(MONS[1], 5000, 900, 400, 300) == (4960, 780)   # logical 1920x1080
+    assert view.clamp_to_monitor(MONS[0], 10, 10, 5000, 300) == (0, 10)          # wider than the screen
+    assert view.clamp_to_monitor(None, 7, 8, 1, 1) == (7, 8)
+
+
+def test_move_window_tries_lua_then_classic(view, monkeypatch):
+    calls = []
+
+    def fake_hypr(cmd):
+        calls.append(cmd)
+        return "ok" if cmd.startswith("dispatch movewindowpixel") else "error: unknown"
+    monkeypatch.setattr(view, "hypr", fake_hypr)
+    monkeypatch.setattr(view, "_move_syntax", None)
+    assert view.move_window("0x1", 10, 20) is True
+    assert [c.split(" ")[1][:4] for c in calls] == ["hl.d", "move"]
+    calls.clear()
+    assert view.move_window("0x1", 30, 40) is True                # remembered: classic only
+    assert len(calls) == 1 and "exact 30 40,address:0x1" in calls[0]
+
+
+def test_hypr_json_handles_no_compositor(view, monkeypatch):
+    monkeypatch.setattr(view, "hypr", lambda cmd: "")
+    assert view.hypr_json("j/monitors") is None
+    monkeypatch.setattr(view, "hypr", lambda cmd: "not json")
+    assert view.hypr_json("j/monitors") is None
