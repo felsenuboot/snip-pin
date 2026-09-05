@@ -115,9 +115,17 @@ def fake_tools(tmp_path, geom="400x300+600+400", slurp_rc=0):
         p = b / name
         p.write_text(f'#!/bin/sh\necho "{name} $*" >> "{log}"\n{body}\n')
         p.chmod(0o755)
-    stub("hyprctl", 'case "$1" in activeworkspace) echo "{\\"id\\":1}";; clients) echo "[]";; '
+    monitors = ('[{"activeWorkspace":{"id":1},"specialWorkspace":{"id":0}},'
+                ' {"activeWorkspace":{"id":5},"specialWorkspace":{"id":-98}}]')
+    clients = ('[{"workspace":{"id":1},"mapped":true,"hidden":false,"at":[10,20],"size":[300,200]},'
+               ' {"workspace":{"id":5},"mapped":true,"hidden":false,"at":[3440,0],"size":[1920,1080]},'
+               ' {"workspace":{"id":-98},"mapped":true,"hidden":false,"at":[500,500],"size":[100,100]},'
+               ' {"workspace":{"id":2},"mapped":true,"hidden":false,"at":[0,0],"size":[50,50]},'
+               ' {"workspace":{"id":1},"mapped":false,"hidden":false,"at":[1,1],"size":[2,2]},'
+               ' {"workspace":{"id":1},"mapped":true,"hidden":true,"at":[3,3],"size":[4,4]}]')
+    stub("hyprctl", f'case "$1" in monitors) echo \'{monitors}\';; clients) echo \'{clients}\';; '
                     'keyword) echo "ok";; *) echo ok;; esac')
-    stub("slurp", f'cat >/dev/null; printf "%s" "{geom}"; exit {slurp_rc}')
+    stub("slurp", f'cat > "{tmp_path}/slurp.in"; printf "%s" "{geom}"; exit {slurp_rc}')
     stub("grim", 'for a; do f=$a; done; printf "png" > "$f"')
     stub("wl-copy", "cat >/dev/null")
     return b, log
@@ -137,6 +145,12 @@ def test_selection_path_with_fake_tools(tmp_path):
     tools = log.read_text()
     assert "grim -g 600,400 400x300" in tools and "wl-copy" in tools
     assert not os.path.exists(tmp_path / "run" / "snip-pin" / "selecting")   # cleaned up
+    # windows on both monitors' workspaces and the special workspace; not on an
+    # inactive workspace, not unmapped, not hidden
+    boxes = (tmp_path / "slurp.in").read_text().split()
+    assert "10,20 300x200" in " ".join(boxes) and "3440,0 1920x1080" in " ".join(boxes)
+    assert "500,500 100x100" in " ".join(boxes)
+    assert "0,0 50x50" not in " ".join(boxes) and "1,1 2x2" not in " ".join(boxes) and "3,3 4x4" not in " ".join(boxes)
 
 
 def test_aborted_selection_captures_nothing(tmp_path):
