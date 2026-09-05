@@ -8,6 +8,9 @@ layout) may still change.
 
 ## [Unreleased]
 
+### Added
+- `docs/decisions.md`: measurements and the decisions on a Rust rewrite, GNOME and macOS ports, layer shell and Python (#25, #26, #27).
+
 ## [0.1.0] – 2026-09-06
 
 First tagged release. The tool was developed on `main` without version

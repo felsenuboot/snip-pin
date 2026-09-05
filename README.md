@@ -33,7 +33,10 @@ around, zoom it, fade it, annotate it, copy or save it.
   the last one again, pick one from a thumbnail grid, or pin the image that is
   in the clipboard.
 - **No daemon, no portal.** `slurp`, `grim` and `wl-copy` plus a GTK4 viewer.
-  All pins share one process, so a second pin appears in about 100 ms.
+  All pins share one process, so a second pin appears in about 50 ms.
+- **Hyprland only, for now.** Other wlroots compositors are on the roadmap
+  ([milestone v0.3.0](https://github.com/felsenuboot/snip-pin/milestone/3));
+  GNOME and macOS are not, see [docs/decisions.md](docs/decisions.md).
 
 ## Install
 
@@ -179,9 +182,12 @@ if that file exists (ML4W dotfiles), otherwise to `~/Pictures`.
   position itself and would need no window rule, but it has no app id in docks,
   cannot be pinned per workspace and would need hand-made dragging. Pins are
   meant to behave like windows, so they are windows; Hyprland places them.
-- **Why Python.** GTK 4 and the GL driver dominate start-up and memory; the
-  language is not the cost, and the single-process model removes the start-up
-  for every pin but the first.
+- **Why Python, and why not GNOME or macOS.** GTK 4 and the GL driver
+  dominate start-up and memory; the language is not the cost, and the
+  single-process model removes the start-up for every pin but the first.
+  [docs/decisions.md](docs/decisions.md) has the measurements, the case
+  against a Rust rewrite, and why GNOME and macOS ports are not planned
+  (use Snipaste or Shottr there).
 - **Why not Flameshot.** On Wayland its pin widget cannot size or place its own
   window, and the capture goes through the screenshot portal, which costs over
   a second on a large screen.
