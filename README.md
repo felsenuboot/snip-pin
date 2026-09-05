@@ -48,7 +48,10 @@ git clone https://github.com/felsenuboot/snip-pin ~/.local/share/snip-pin
 
 `hyprpicker` (freezes the screen during selection), `python-numpy` (element
 snapping) and `libnotify` (toasts) are optional. `install.sh` adds a desktop
-entry and icon so docks show a proper icon for pins.
+entry and icon so docks show a proper icon for pins, plus an *Open with → Pin
+image* entry for file managers, and ends with `snip-pin.sh doctor`, which
+lists what is installed and what is missing. `install.sh --uninstall` removes
+the entries again.
 
 Bind the script and add a window rule so pins float above everything without
 animations, blur, shadows or rounded corners. Hyprland Lua config (0.56+):
@@ -140,6 +143,7 @@ opened from the picker appear centred.
 | `snip-pin.sh history` | open a thumbnail grid of all cached snips, newest first |
 | `snip-pin.sh clipboard` | pin the image in the clipboard (PNG, JPEG, WebP, … or a copied image file), centred on the screen |
 | `snip-pin.sh clear` | delete every snip that is not kept |
+| `snip-pin.sh doctor` | check the dependencies and print versions |
 
 Pressing the snip key twice quickly also opens the history: the second press
 aborts the selection the first one started. In the picker, click or use the

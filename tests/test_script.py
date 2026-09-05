@@ -264,3 +264,31 @@ def test_clipboard_without_an_image(tmp_path):
     assert run(["clipboard"], env).returncode == 0
     assert not (tmp_path / "viewer.log").exists()
     assert not list((tmp_path / "cache" / "snip-pin").glob("*.png"))
+
+
+def test_doctor_reports_and_exits_by_required_tools(tmp_path):
+    env = make_env(tmp_path)
+    b, _ = fake_tools(tmp_path)
+    for name in ("wl-paste", "jq"):
+        (b / name).write_text("#!/bin/sh\nexit 0\n")
+        (b / name).chmod(0o755)
+    env["PATH"] = f"{b}:{env['PATH']}"
+    r = run(["doctor"], env)
+    assert "required:" in r.stdout and "optional:" in r.stdout and "hyprland:" in r.stdout
+    assert r.returncode == 0, r.stdout + r.stderr
+    # a PATH with only what the script itself needs: every capture tool is missing
+    import shutil
+    import sys
+    mini = tmp_path / "mini"
+    mini.mkdir()
+    for tool in ("bash", "sh", "cat", "readlink", "dirname", "basename", "mkdir", "find", "rm", "sort",
+                 "head", "cut", "date", "wc", "od", "tr", "grep", "sed", "jq", "env"):
+        real = shutil.which(tool)
+        if real:
+            os.symlink(real, mini / tool)
+    os.symlink(sys.executable, mini / "python3")
+    env["PATH"] = str(mini)
+    r = run(["doctor"], env)
+    assert r.returncode == 1, r.stdout + r.stderr
+    for tool in ("grim", "slurp", "wl-copy", "hyprctl"):
+        assert f"{tool:<12} MISSING" in r.stdout
