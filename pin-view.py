@@ -24,6 +24,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 import warnings
 
@@ -32,7 +33,8 @@ import warnings
 # instead of a full GTK start-up), so the second and later pins appear at
 # once and share one GL driver instance. Each pin is its own window; closing
 # one leaves the others alone, and the process ends with the last window.
-SOCKET = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "snip-pin.sock")
+RUNTIME_DIR = os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir()
+SOCKET = os.path.join(RUNTIME_DIR, "snip-pin.sock")
 
 
 def hand_over(args):
@@ -704,20 +706,33 @@ class Pin(Gtk.ApplicationWindow):
         m.append_section(None, tail)
         return m
 
-    def export_path(self):
-        """Path of the image to copy/save: the original, or a baked annotated copy."""
+    def export(self):
+        """(path, temporary): the original, or the annotations baked into a temp file.
+
+        The caller deletes a temporary file when done. Rendering next to the
+        original would litter the cache (and the history) or the user's own
+        folder for `pin FILE`.
+        """
         ops = list(self.ops)
         if self.typing is not None and self.typing["text"].strip():
             ops.append(self.typing)
         if not ops:
-            return self.path
-        base, _ = os.path.splitext(self.path)
-        return render_png(self.pixbuf, ops, base + "_annotated.png")
+            return self.path, False
+        fd, tmp = tempfile.mkstemp(prefix="snip-pin-", suffix=".png", dir=RUNTIME_DIR)
+        os.close(fd)
+        render_png(self.pixbuf, ops, tmp)
+        return tmp, True
 
     def copy(self, *a):
-        # wl-copy forks a helper that keeps serving the clipboard after we exit
-        with open(self.export_path(), "rb") as f:
-            subprocess.run(["wl-copy", "--type", "image/png"], stdin=f)
+        path, temporary = self.export()
+        try:
+            # wl-copy reads all of stdin, then forks a helper that keeps
+            # serving the clipboard after we exit
+            with open(path, "rb") as f:
+                subprocess.run(["wl-copy", "--type", "image/png"], stdin=f)
+        finally:
+            if temporary:
+                os.unlink(path)
         notify("Copied to clipboard")
         self.close()
 
@@ -725,7 +740,12 @@ class Pin(Gtk.ApplicationWindow):
         folder = screenshot_folder()
         os.makedirs(folder, exist_ok=True)
         dest = os.path.join(folder, datetime.datetime.now().strftime("pin_%Y%m%d_%H%M%S.png"))
-        shutil.copyfile(self.export_path(), dest)
+        path, temporary = self.export()
+        try:
+            shutil.copyfile(path, dest)
+        finally:
+            if temporary:
+                os.unlink(path)
         notify(f"Saved {dest}")
         self.close()
 

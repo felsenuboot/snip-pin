@@ -34,6 +34,8 @@ STATE="${XDG_RUNTIME_DIR:-/tmp}/snip-pin"
 TAP_MS="${SNIP_PIN_TAP_MS:-300}"
 mkdir -p "$CACHE/kept" "$STATE"
 [[ "$KEEP" -gt 0 ]] && find "$CACHE" -maxdepth 1 -name '*.png' -mtime +"$KEEP" -delete 2>/dev/null
+# baked copies that versions before 0.1.0 left next to the original
+find "$CACHE" -maxdepth 2 -name '*_annotated.png' -delete 2>/dev/null
 
 notify() { command -v notify-send >/dev/null && notify-send -i camera-photo-symbolic -t 2000 "Snip" "$1"; }
 
