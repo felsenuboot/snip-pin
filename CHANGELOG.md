@@ -24,6 +24,7 @@ First tagged release. Everything before it was developed on `main` without
 version numbers between 2026-09-02 and 2026-09-05.
 
 ### Added
+- Test suite (`tests/`, pytest) for the display-free code and a third CI job that runs it (#13).
 - `install.sh --uninstall`, and a hidden "Pin image" desktop entry so file managers offer *Open with → Pin image* for PNG, JPEG, WebP, BMP and GIF files.
 - `SNIP_ELEMENTS_BUDGET_MS` to tune the detection budget.
 - Snip a region, a window or an element inside a window and pin it where it

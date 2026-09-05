@@ -27,7 +27,7 @@
 # SNIP_NO_ELEMENTS=1 disables element snapping.
 
 HERE=$(dirname "$(readlink -f "$0")")
-VIEWER="$HERE/pin-view.py"
+VIEWER="${SNIP_PIN_VIEWER:-$HERE/pin-view.py}"       # override: tests
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/snip-pin"
 KEEP="${SNIP_PIN_KEEP_DAYS:-7}"
 STATE="${XDG_RUNTIME_DIR:-/tmp}/snip-pin"
