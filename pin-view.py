@@ -102,6 +102,18 @@ window.snip-pin.editing {{ border-color: {EDIT_COLOR}; }}
 def hex_to_rgb(h):
     return tuple(int(h[i:i + 2], 16) / 255 for i in (1, 3, 5))
 
+NOTIFY_SEND = shutil.which("notify-send")           # libnotify is optional
+
+def notify(msg, ms=1500):
+    """Desktop toast; silently a no-op without libnotify."""
+    if NOTIFY_SEND is None:
+        return
+    try:
+        subprocess.Popen([NOTIFY_SEND, "-i", "camera-photo-symbolic", "-t", str(ms), "Snip", msg],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError:
+        pass
+
 def screenshot_folder():
     p = os.path.expanduser("~/.config/ml4w/settings/screenshot-folder")
     try:
@@ -706,7 +718,7 @@ class Pin(Gtk.ApplicationWindow):
         # wl-copy forks a helper that keeps serving the clipboard after we exit
         with open(self.export_path(), "rb") as f:
             subprocess.run(["wl-copy", "--type", "image/png"], stdin=f)
-        self.notify_user("Copied to clipboard")
+        notify("Copied to clipboard")
         self.close()
 
     def save(self, *a):
@@ -714,11 +726,8 @@ class Pin(Gtk.ApplicationWindow):
         os.makedirs(folder, exist_ok=True)
         dest = os.path.join(folder, datetime.datetime.now().strftime("pin_%Y%m%d_%H%M%S.png"))
         shutil.copyfile(self.export_path(), dest)
-        self.notify_user(f"Saved {dest}")
+        notify(f"Saved {dest}")
         self.close()
-
-    def notify_user(self, msg):
-        subprocess.Popen(["notify-send", "-i", "camera-photo-symbolic", "-t", "1500", "Snip", msg])
 
 def open_pin(app, args):
     pos = (int(args[1]), int(args[2])) if len(args) >= 3 else None

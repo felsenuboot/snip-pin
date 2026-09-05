@@ -8,6 +8,9 @@ layout) may still change.
 
 ## [Unreleased]
 
+### Fixed
+- Copy and save no longer crash, leaving the pin open, when `notify-send` is not installed (#6).
+
 ## [0.1.0] – unreleased
 
 First tagged release. Everything before it was developed on `main` without
