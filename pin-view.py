@@ -734,7 +734,9 @@ class Pin(Gtk.ApplicationWindow):
         ops = list(self.ops)
         if self.typing is not None and self.typing["text"].strip():
             ops.append(self.typing)
-        if not ops:
+        # the clipboard and the save folder always get PNG: a JPEG opened via
+        # "pin FILE" must be re-encoded even without annotations
+        if not ops and self.path.lower().endswith(".png"):
             return self.path, False
         fd, tmp = tempfile.mkstemp(prefix="snip-pin-", suffix=".png", dir=RUNTIME_DIR)
         os.close(fd)
