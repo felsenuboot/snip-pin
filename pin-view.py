@@ -248,11 +248,14 @@ class Pin(Gtk.ApplicationWindow):
         # All pins share one process (see main), so the placement loop tells
         # windows apart by a unique title until each one has been placed.
         global _seq
+        # load before the window exists: a window registered with the
+        # application would keep the process alive after a failed load
+        pixbuf = GdkPixbuf.Pixbuf.new_from_file(path)
         _seq += 1
         super().__init__(application=app, title=f"snip-pin #{_seq}" if pos else "snip-pin")
         self.path = path
         self.pos = pos
-        self.pixbuf = GdkPixbuf.Pixbuf.new_from_file(path)
+        self.pixbuf = pixbuf
         self.iw, self.ih = self.pixbuf.get_width(), self.pixbuf.get_height()
         self.scale = 1.0
         self.opacity = 1.0
@@ -750,10 +753,24 @@ class Pin(Gtk.ApplicationWindow):
         self.close()
 
 def open_pin(app, args):
-    pos = (int(args[1]), int(args[2])) if len(args) >= 3 else None
-    win = Pin(app, args[0], pos)
+    """Open a pin for [path, x, y]; a bad file tells the user instead of crashing."""
+    path = args[0]
+    try:
+        pos = (int(args[1]), int(args[2])) if len(args) >= 3 else None
+    except ValueError:
+        pos = None
+    try:
+        win = Pin(app, path, pos)
+    except GLib.Error as e:
+        # deleted between 'last' and here, a truncated clipboard image, 'pin FILE' on a non-image
+        notify(f"Cannot open {os.path.basename(path)}", 3000)
+        print(f"pin-view: cannot open {path}: {e.message.splitlines()[0]}", file=sys.stderr)
+        if not app.get_windows():
+            app.quit()             # nothing to show: a window-less GtkApplication would idle forever
+        return False
     win.present()
     win.place()
+    return True
 
 
 def serve(app):
@@ -776,9 +793,11 @@ def serve(app):
             conn.settimeout(3)
             data = conn.makefile("rb").readline()
             args = json.loads(data) if data.strip() else []
+            # acknowledge first: the client must not wait for GTK, and must
+            # not start its own viewer when the file turns out to be bad
+            conn.sendall(b"1")
             if args:
                 open_pin(app, args)
-            conn.sendall(b"1")
         except (OSError, ValueError):
             pass
         finally:
