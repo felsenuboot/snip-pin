@@ -109,3 +109,18 @@ def test_mosaic_pixbuf_clips_to_the_image(tmp_path, view):
     assert (x0, y0, w, h) == (0, 0, 30, 20)
     assert (big.get_width(), big.get_height()) == (30, 20)
     assert view.mosaic_pixbuf(pb, {"kind": "blur", "pts": [(60, 60), (70, 70)], "width": 4}) is None
+
+
+def test_scroll_steps_wheel_is_one_per_notch(view):
+    assert view.scroll_steps(True, -1.0, 0.0) == (-1, 0.0)
+    assert view.scroll_steps(True, 1.0, 12.0) == (1, 12.0)        # the smooth remainder is untouched
+
+
+def test_scroll_steps_smooth_accumulates(view):
+    acc, steps = 0.0, []
+    for _ in range(10):                                             # a flick: ten events of 7 units
+        st, acc = view.scroll_steps(False, 7.0, acc)
+        steps.append(st)
+    assert sum(steps) == 2 and max(steps) <= 1 and 0 <= acc < view.SMOOTH_STEP
+    st, acc = view.scroll_steps(False, -100.0, 0.0)                 # a big negative delta: whole steps only
+    assert st == -3 and abs(acc - (-10.0)) < 1e-9

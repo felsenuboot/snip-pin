@@ -88,6 +88,8 @@ MARKER_FACTOR = 3.5                                # marker stroke = width * fac
 TEXT_PX = {2: 16, 4: 22, 7: 30}                    # font size per stroke width
 MOSAIC_PX = {2: 5, 4: 9, 7: 14}                    # block size per stroke width
 TOOLBAR_HIDE_MS = 300                              # grace period after the pointer leaves
+SMOOTH_STEP = 30.0                                 # touchpad scroll units per zoom/opacity step
+OSD_MS = 700                                       # how long the zoom / opacity readout stays
 
 CSS = f"""
 window.snip-pin {{
@@ -117,6 +119,14 @@ def notify(msg, ms=1500):
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except OSError:
         pass
+
+def scroll_steps(wheel, dy, acc):
+    """(steps, new_acc): a wheel notch is one step; smooth deltas accumulate, one step per SMOOTH_STEP."""
+    if wheel:
+        return int(dy), acc
+    acc += dy
+    steps = int(acc / SMOOTH_STEP)
+    return steps, acc - steps * SMOOTH_STEP
 
 def unique_path(folder, stem, ext):
     """folder/stem.ext, or stem_2.ext, stem_3.ext ... if that exists already."""
@@ -286,6 +296,8 @@ class Pin(Gtk.ApplicationWindow):
         self.hovered = False
         self.toolbar_shown = False    # tracked ourselves: get_visible() is true during the fade-out
         self.hide_timer = None
+        self.scroll_acc = 0.0         # smooth-scroll distance not yet turned into a step
+        self.osd = None               # (text, timer id): zoom / opacity readout drawn on the pin
 
         self.set_decorated(False)
         self.set_resizable(False)
@@ -413,6 +425,34 @@ class Pin(Gtk.ApplicationWindow):
             draw_op(cr, self.pixbuf, self.pending)
         if self.typing is not None:
             draw_op(cr, self.pixbuf, self.typing, caret=True)
+        if self.osd is not None:
+            self.draw_osd(cr, w, h)
+
+    def draw_osd(self, cr, w, h):
+        """Zoom / opacity readout in the corner; on screen only, never exported."""
+        cr.identity_matrix()
+        layout = PangoCairo.create_layout(cr)
+        layout.set_font_description(Pango.FontDescription.from_string("Sans Bold 11px"))
+        layout.set_text(self.osd[0], -1)
+        _, logical = layout.get_pixel_extents()
+        pad, x, y = 5, 6, 6
+        cr.set_source_rgba(0, 0, 0, 0.6)
+        cr.rectangle(x, y, logical.width + 2 * pad, logical.height + 2 * pad)
+        cr.fill()
+        cr.set_source_rgb(1, 1, 1)
+        cr.move_to(x + pad, y + pad)
+        PangoCairo.show_layout(cr, layout)
+
+    def show_osd(self, text):
+        if self.osd is not None:
+            GLib.source_remove(self.osd[1])
+        self.osd = (text, GLib.timeout_add(OSD_MS, self.hide_osd))
+        self.area.queue_draw()
+
+    def hide_osd(self):
+        self.osd = None
+        self.area.queue_draw()
+        return False
 
     # ---- placement via Hyprland (apps cannot position themselves on Wayland)
     def place(self):
@@ -658,12 +698,20 @@ class Pin(Gtk.ApplicationWindow):
         self.menu.popup()
 
     def on_scroll(self, ctrl, dx, dy):
+        # A wheel notch is one step. A touchpad sends many small smooth events
+        # per flick; those accumulate and give one step per SMOOTH_STEP units,
+        # so one flick no longer zooms 3-5x or fades the pin to nothing.
+        steps, self.scroll_acc = scroll_steps(ctrl.get_unit() == Gdk.ScrollUnit.WHEEL, dy, self.scroll_acc)
+        if steps == 0:
+            return True
         ctrl_held = ctrl.get_current_event_state() & Gdk.ModifierType.CONTROL_MASK
         if ctrl_held:
-            self.opacity = min(1.0, max(0.1, self.opacity + (-0.1 if dy > 0 else 0.1)))
+            self.opacity = min(1.0, max(0.1, self.opacity - 0.1 * steps))
             self.set_opacity(self.opacity)
+            self.show_osd(f"{round(self.opacity * 100)} %")
         else:
-            self.set_scale(self.scale / ZOOM_STEP if dy > 0 else self.scale * ZOOM_STEP)
+            self.set_scale(self.scale / ZOOM_STEP ** steps)
+            self.show_osd(f"{round(self.scale * 100)} %")
         return True
 
     def on_key(self, ctrl, keyval, keycode, state):
@@ -697,9 +745,9 @@ class Pin(Gtk.ApplicationWindow):
             if keyval in (Gdk.KEY_y, Gdk.KEY_Y):
                 self.redo(); return True
             if keyval == Gdk.KEY_0:
-                self.set_scale(1.0); return True
+                self.set_scale(1.0); self.show_osd("100 %"); return True
             if keyval == Gdk.KEY_1:
-                self.opacity = 1.0; self.set_opacity(1.0); return True
+                self.opacity = 1.0; self.set_opacity(1.0); self.show_osd("100 %"); return True
             return False
         name = Gdk.keyval_name(keyval) or ""
         if name.lower() in TOOL_KEYS:

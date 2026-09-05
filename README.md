@@ -101,7 +101,7 @@ than 0.56 replace `hl.dsp.window.move(...)` in `pin-view.py` with
 | Action | Input |
 |---|---|
 | Move | drag with the left mouse button |
-| Zoom | mouse wheel (10 % steps), `Ctrl+0` resets |
+| Zoom | mouse wheel or touchpad (10 % steps, the percentage shows briefly), `Ctrl+0` resets |
 | Opacity | `Ctrl` + wheel, `Ctrl+1` resets |
 | Copy image and close | `Ctrl+C`, double-click or right-click |
 | Save to the screenshot folder and close | `Ctrl+S` or the middle-click menu |
