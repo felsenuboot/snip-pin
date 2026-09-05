@@ -9,6 +9,7 @@ layout) may still change.
 ## [Unreleased]
 
 ### Added
+- `snip-pin.sh clipboard` pins JPEG, WebP, BMP, GIF and TIFF clipboard images and copied image files (`text/uri-list`), not only PNG; they are converted into the cache as PNG (#17).
 - `SNIP_PIN_SAVE_DIR` chooses the save folder; without it the XDG pictures directory (localised) is used after the ML4W setting (#16).
 
 ### Fixed
