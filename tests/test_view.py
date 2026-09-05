@@ -252,3 +252,11 @@ def test_hypr_json_handles_no_compositor(view, monkeypatch):
     assert view.hypr_json("j/monitors") is None
     monkeypatch.setattr(view, "hypr", lambda cmd: "not json")
     assert view.hypr_json("j/monitors") is None
+
+
+def test_output_scale(view):
+    assert view.output_scale(MONS, (100, 100)) == 1.0
+    assert view.output_scale(MONS, (3500, 100)) == 2.0
+    assert view.output_scale(MONS, None) == 1.0
+    assert view.output_scale(None, (5, 5)) == 1.0
+    assert view.output_scale([{"x": 0, "y": 0, "width": 100, "height": 100, "scale": 0}], (1, 1)) == 1.0

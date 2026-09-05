@@ -367,8 +367,16 @@ _css_loaded = False
 _seq = 0
 
 
+def output_scale(monitors, pos):
+    """Scale factor of the output a positioned pin was captured on (1 without a position)."""
+    if pos is None:
+        return 1.0
+    m = monitor_at(monitors, pos[0], pos[1])
+    return float((m or {}).get("scale") or 1) or 1.0
+
+
 class Pin(Gtk.ApplicationWindow):
-    def __init__(self, app, path, pos):
+    def __init__(self, app, path, pos, out_scale=1.0):
         # All pins share one process (see main), so the placement loop tells
         # windows apart by a unique title until each one has been placed.
         global _seq
@@ -381,7 +389,11 @@ class Pin(Gtk.ApplicationWindow):
         self.pos = pos
         self.pixbuf = pixbuf
         self.iw, self.ih = self.pixbuf.get_width(), self.pixbuf.get_height()
-        self.scale = max(1.0, self.min_scale())        # tiny snips open enlarged, uniformly
+        # grim captures at the output's scale, so on a 2x monitor the image has
+        # twice the pixels of the logical region: show it at 1/scale so the pin
+        # covers exactly the region it was taken from; zoom is relative to that
+        self.base_scale = 1.0 / out_scale
+        self.scale = max(self.base_scale, self.min_scale())   # tiny snips open enlarged, uniformly
         self.opacity = 1.0
         # annotation state
         self.tool = None
@@ -453,7 +465,7 @@ class Pin(Gtk.ApplicationWindow):
         self.menu.set_parent(self.area)
         self.menu.set_has_arrow(False)
         for name, cb in (("copy", self.copy), ("save", self.save),
-                         ("reset", lambda *a: self.set_scale(1.0)), ("close", lambda *a: self.close()),
+                         ("reset", lambda *a: self.set_scale(self.base_scale)), ("close", lambda *a: self.close()),
                          ("undo", lambda *a: self.undo()), ("redo", lambda *a: self.redo())):
             act = Gio.SimpleAction.new(name, None)
             act.connect("activate", cb)
@@ -806,7 +818,7 @@ class Pin(Gtk.ApplicationWindow):
             self.show_osd(f"{round(self.opacity * 100)} %")
         else:
             self.set_scale(self.scale / ZOOM_STEP ** steps)
-            self.show_osd(f"{round(self.scale * 100)} %")
+            self.show_osd(f"{round(self.scale / self.base_scale * 100)} %")
         return True
 
     def on_key(self, ctrl, keyval, keycode, state):
@@ -840,7 +852,7 @@ class Pin(Gtk.ApplicationWindow):
             if keyval in (Gdk.KEY_y, Gdk.KEY_Y):
                 self.redo(); return True
             if keyval == Gdk.KEY_0:
-                self.set_scale(1.0); self.show_osd("100 %"); return True
+                self.set_scale(self.base_scale); self.show_osd("100 %"); return True
             if keyval == Gdk.KEY_1:
                 self.opacity = 1.0; self.set_opacity(1.0); self.show_osd("100 %"); return True
             return False
@@ -929,7 +941,7 @@ def open_pin(app, args):
     except ValueError:
         pos = None
     try:
-        win = Pin(app, path, pos)
+        win = Pin(app, path, pos, output_scale(hypr_json("j/monitors") if pos else None, pos))
     except GLib.Error as e:
         # deleted between 'last' and here, a truncated clipboard image, 'pin FILE' on a non-image
         notify(f"Cannot open {os.path.basename(path)}", 3000)
