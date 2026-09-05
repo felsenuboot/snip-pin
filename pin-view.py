@@ -491,6 +491,12 @@ class Pin(Gtk.ApplicationWindow):
         keys.connect("key-pressed", self.on_key)
         self.add_controller(keys)
 
+        # dropping image files (from a file manager) opens each as a new pin
+        drop = Gtk.DropTarget.new(Gio.File, Gdk.DragAction.COPY)
+        drop.set_gtypes([Gdk.FileList, Gio.File])
+        drop.connect("drop", self.on_drop)
+        self.area.add_controller(drop)
+
         self.menu = Gtk.PopoverMenu.new_from_model(self.build_menu())
         self.menu.set_parent(self.area)
         self.menu.set_has_arrow(False)
@@ -836,6 +842,13 @@ class Pin(Gtk.ApplicationWindow):
             op = self.new_op("counter", self.to_img(x, y))
             op["n"] = self.next_counter()             # undo takes the number back with the badge
             self.push(op)
+
+    def on_drop(self, target, value, x, y):
+        files = value.get_files() if isinstance(value, Gdk.FileList) else [value]
+        paths = [f.get_path() for f in files if isinstance(f, Gio.File) and f.get_path()]
+        for p in paths:
+            open_pin(self.get_application(), [p])        # a non-image gets the "Cannot open" toast
+        return bool(paths)
 
     def on_menu(self, gesture, n, x, y):
         self.menu.set_pointing_to(Gdk.Rectangle(x=int(x), y=int(y), width=1, height=1))

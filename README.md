@@ -109,6 +109,7 @@ accepted.
 | Copy image and close | `Ctrl+C`, double-click or right-click |
 | Save to the screenshot folder and close | `Ctrl+S` or the middle-click menu |
 | Close without copying | `Esc` |
+| Pin more images | drop image files from a file manager onto a pin |
 
 A toolbar appears under the pin while the pointer is over it. Pick a tool and
 draw with the left mouse button; with no tool selected the pin moves as usual.
