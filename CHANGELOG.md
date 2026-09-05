@@ -9,6 +9,7 @@ layout) may still change.
 ## [Unreleased]
 
 ### Fixed
+- Two pins saved within the same second no longer overwrite each other (`pin_..._2.png`), and a save that fails (unwritable folder, full disk) shows the error and keeps the pin open instead of dying with a traceback (#10).
 - A missing, truncated or non-image file (a snip deleted before `last`, a bad clipboard image, `pin FILE` on a text file) shows a "Cannot open" toast instead of crashing the viewer silently and making the next pin wait three seconds (#7).
 - Copying or saving an annotated pin no longer leaves a `_annotated.png` next to the original: in the cache (where the history picker and `last` picked it up), in `kept/` (where it never expired) or in the user's folder for `pin FILE`. Leftovers from earlier versions are cleaned up and ignored (#5).
 - Copy and save no longer crash, leaving the pin open, when `notify-send` is not installed (#6).

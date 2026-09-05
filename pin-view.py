@@ -116,6 +116,15 @@ def notify(msg, ms=1500):
     except OSError:
         pass
 
+def unique_path(folder, stem, ext):
+    """folder/stem.ext, or stem_2.ext, stem_3.ext ... if that exists already."""
+    p = os.path.join(folder, stem + ext)
+    n = 2
+    while os.path.exists(p):
+        p = os.path.join(folder, f"{stem}_{n}{ext}")
+        n += 1
+    return p
+
 def screenshot_folder():
     p = os.path.expanduser("~/.config/ml4w/settings/screenshot-folder")
     try:
@@ -741,11 +750,16 @@ class Pin(Gtk.ApplicationWindow):
 
     def save(self, *a):
         folder = screenshot_folder()
-        os.makedirs(folder, exist_ok=True)
-        dest = os.path.join(folder, datetime.datetime.now().strftime("pin_%Y%m%d_%H%M%S.png"))
         path, temporary = self.export()
         try:
+            os.makedirs(folder, exist_ok=True)
+            dest = unique_path(folder, datetime.datetime.now().strftime("pin_%Y%m%d_%H%M%S"), ".png")
             shutil.copyfile(path, dest)
+        except OSError as e:
+            # unwritable folder, full disk: keep the pin so nothing is lost
+            notify(f"Cannot save to {folder}: {e.strerror}", 3000)
+            print(f"pin-view: cannot save to {folder}: {e}", file=sys.stderr)
+            return
         finally:
             if temporary:
                 os.unlink(path)
