@@ -33,13 +33,23 @@ import warnings
 # instead of a full GTK start-up), so the second and later pins appear at
 # once and share one GL driver instance. Each pin is its own window; closing
 # one leaves the others alone, and the process ends with the last window.
+#
+# The socket is abstract (Linux): no file to unlink, nothing stale after a
+# crash, and bind() failing means exactly "a live viewer holds the name", so
+# no process ever takes the socket over from another. Elsewhere a path in
+# $XDG_RUNTIME_DIR is used.
 RUNTIME_DIR = os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir()
-SOCKET = os.path.join(RUNTIME_DIR, "snip-pin.sock")
+if sys.platform.startswith("linux"):
+    SOCKET = "\0snip-pin-%d" % os.getuid()
+else:
+    SOCKET = os.path.join(RUNTIME_DIR, "snip-pin.sock")
+HANDOVER_TIMEOUT = 1.5      # a live server answers in milliseconds; longer means it is stuck
 
 
 def hand_over(args):
+    """Send [path, x, y] to a running viewer; True if it took the pin."""
     s = socket.socket(socket.AF_UNIX)
-    s.settimeout(3)
+    s.settimeout(HANDOVER_TIMEOUT)
     try:
         s.connect(SOCKET)
         s.sendall(json.dumps(args).encode() + b"\n")
@@ -847,38 +857,77 @@ def open_pin(app, args):
     return True
 
 
+def read_request(conn, timeout=0.2):
+    """One JSON line from a hand-over client, or None. Bounded: a stalled
+    client may cost every pin a fifth of a second, never more."""
+    conn.settimeout(timeout)
+    buf = b""
+    try:
+        while b"\n" not in buf and len(buf) < 65536:
+            chunk = conn.recv(4096)
+            if not chunk:
+                break
+            buf += chunk
+    except OSError:
+        return None
+    line = buf.split(b"\n", 1)[0].strip()
+    if not line:
+        return None
+    try:
+        args = json.loads(line)
+    except ValueError:
+        return None
+    return args if isinstance(args, list) and args and all(isinstance(a, str) for a in args) else None
+
+
 def serve(app):
-    """Listen for hand-overs from later invocations (see hand_over)."""
+    """Listen for hand-overs from later invocations (see hand_over). False if
+    another live viewer already serves; this one then just shows its own pin."""
     srv = socket.socket(socket.AF_UNIX)
     try:
+        if not SOCKET.startswith("\0") and os.path.exists(SOCKET):
+            # path sockets only: a leftover of a crashed viewer, or a live one
+            if hand_over([]):
+                srv.close()
+                return False
+            os.unlink(SOCKET)
         srv.bind(SOCKET)
     except OSError:
-        if hand_over([]):           # somebody else got there first; let them serve
-            return
-        os.unlink(SOCKET)
-        srv.bind(SOCKET)
+        srv.close()
+        return False
     srv.listen(8)
     srv.setblocking(False)
-    atexit.register(lambda: os.path.exists(SOCKET) and os.unlink(SOCKET))
+    if not SOCKET.startswith("\0"):
+        atexit.register(lambda: os.path.exists(SOCKET) and os.unlink(SOCKET))
 
     def on_connect(fd, cond):
-        conn, _ = srv.accept()
         try:
-            conn.settimeout(3)
-            data = conn.makefile("rb").readline()
-            args = json.loads(data) if data.strip() else []
+            conn, _ = srv.accept()
+        except OSError:
+            return True
+        try:
+            args = read_request(conn)
             # acknowledge first: the client must not wait for GTK, and must
             # not start its own viewer when the file turns out to be bad
             conn.sendall(b"1")
             if args:
                 open_pin(app, args)
-        except (OSError, ValueError):
+        except OSError:
             pass
         finally:
             conn.close()
         return True
-    GLib.io_add_watch(srv.fileno(), GLib.PRIORITY_DEFAULT, GLib.IO_IN, on_connect)
+    watch = GLib.io_add_watch(srv.fileno(), GLib.PRIORITY_DEFAULT, GLib.IO_IN, on_connect)
+
+    def on_window_removed(app, win):
+        # the process ends with the last window: stop accepting right away so
+        # a hand-over arriving in that moment is refused instead of ignored
+        if not app.get_windows():
+            GLib.source_remove(watch)
+            srv.close()
+    app.connect("window-removed", on_window_removed)
     app.hold_socket = srv          # keep it alive with the application
+    return True
 
 
 def main():
