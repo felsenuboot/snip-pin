@@ -35,7 +35,7 @@ around, zoom it, fade it, annotate it, copy or save it.
 - **No daemon, no portal.** `slurp`, `grim` and `wl-copy` plus a GTK4 viewer.
   All pins share one process, so a second pin appears in about 50 ms.
 - **Hyprland only, for now.** Other wlroots compositors are on the roadmap
-  ([milestone v0.3.0](https://github.com/felsenuboot/snip-pin/milestone/3));
+  ([milestone v0.4.0](https://github.com/felsenuboot/snip-pin/milestone/3));
   GNOME and macOS are not, see [docs/decisions.md](docs/decisions.md).
 
 ## Install
@@ -120,7 +120,7 @@ draw with the left mouse button; with no tool selected the pin moves as usual.
 | Ellipse | `E` | outline, drag the bounding box |
 | Arrow | `A` | drag from tail to head |
 | Pen | `P` | freehand |
-| Text | `T` | click to place, type, `Enter` commits |
+| Text | `T` | click to place, type (dead keys, Compose and input methods work, `Ctrl+V` pastes), `Enter` commits |
 | Counter | `N` | click to place a numbered badge: 1, 2, 3 …; undo takes the number back |
 | Marker | `M` | wide, semi-transparent highlighter |
 | Blur | `B` | pixelates a rectangle, for hiding secrets |

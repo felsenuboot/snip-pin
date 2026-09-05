@@ -383,7 +383,7 @@ def draw_op(cr, pixbuf, op, caret=False):
         x, y = pts[0]
         layout = PangoCairo.create_layout(cr)
         layout.set_font_description(Pango.FontDescription.from_string(f"Sans Bold {size}px"))
-        layout.set_text(op["text"], -1)
+        layout.set_text(op["text"] + (op.get("_preedit", "") if caret else ""), -1)
         PangoCairo.update_layout(cr, layout)
         cr.move_to(x, y - size * 0.75)
         PangoCairo.layout_path(cr, layout)
@@ -514,6 +514,13 @@ class Pin(Gtk.ApplicationWindow):
         keys = Gtk.EventControllerKey()
         keys.connect("key-pressed", self.on_key)
         self.add_controller(keys)
+        # Text goes through an input method context while typing: dead keys,
+        # Compose, ibus/fcitx (CJK, emoji) all work; it is focused only while
+        # a text op is open so tool shortcuts keep working otherwise.
+        self.im = Gtk.IMMulticontext()
+        self.im.set_client_widget(self.area)
+        self.im.connect("commit", self.on_im_commit)
+        self.im.connect("preedit-changed", self.on_im_preedit)
 
         # dropping image files (from a file manager) opens each as a new pin
         drop = Gtk.DropTarget.new(Gio.File, Gdk.DragAction.COPY)
@@ -719,7 +726,7 @@ class Pin(Gtk.ApplicationWindow):
 
     def undo(self):
         if self.typing is not None:
-            self.typing = None
+            self.cancel_text()
         elif self.crop_pending is not None:
             self.crop_pending = None
         elif self.ops:
@@ -768,11 +775,49 @@ class Pin(Gtk.ApplicationWindow):
         if c is not None:
             self.move_to(c["at"][0] + round(dx * self.scale), c["at"][1] + round(dy * self.scale))
 
+    def start_text(self, p):
+        self.typing = self.new_op("text", p)
+        self.im.reset()
+        self.im.focus_in()
+        self.sync_toolbar()
+        self.area.queue_draw()
+
     def commit_text(self):
         op, self.typing = self.typing, None
-        if op is not None and op["text"].strip():
-            self.push(op)
+        if op is not None:
+            self.im.focus_out()
+            op.pop("_preedit", None)
+            if op["text"].strip():
+                self.push(op)
         self.area.queue_draw()
+
+    def cancel_text(self):
+        if self.typing is not None:
+            self.im.focus_out()
+        self.typing = None
+        self.sync_toolbar()
+        self.area.queue_draw()
+
+    def on_im_commit(self, im, text):
+        if self.typing is not None and text:
+            self.typing["text"] += text
+            self.area.queue_draw()
+
+    def on_im_preedit(self, im):
+        if self.typing is not None:
+            self.typing["_preedit"] = im.get_preedit_string()[0]
+            self.area.queue_draw()
+
+    def paste_text(self):
+        def done(clipboard, result):
+            try:
+                text = clipboard.read_text_finish(result)
+            except GLib.Error:
+                return
+            if text and self.typing is not None:
+                self.typing["text"] += " ".join(text.split())
+                self.area.queue_draw()
+        self.get_clipboard().read_text_async(None, done)
 
     def new_op(self, kind, p):
         return {"kind": kind, "pts": [p], "color": self.color, "width": self.width, "text": ""}
@@ -928,9 +973,7 @@ class Pin(Gtk.ApplicationWindow):
             self.copy()
         elif self.tool == "text":
             self.commit_text()
-            self.typing = self.new_op("text", self.to_img(x, y))
-            self.sync_toolbar()
-            self.area.queue_draw()
+            self.start_text(self.to_img(x, y))
         elif self.tool == "counter" and n == 1:
             op = self.new_op("counter", self.to_img(x, y))
             op["n"] = self.next_counter()             # undo takes the number back with the badge
@@ -967,18 +1010,27 @@ class Pin(Gtk.ApplicationWindow):
     def on_key(self, ctrl, keyval, keycode, state):
         ctrl_held = state & Gdk.ModifierType.CONTROL_MASK
         shift = state & Gdk.ModifierType.SHIFT_MASK
-        # text entry swallows plain keys
-        if self.typing is not None and not ctrl_held:
-            if keyval == Gdk.KEY_Escape:
-                self.typing = None; self.sync_toolbar(); self.area.queue_draw(); return True
-            if keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter):
+        # text entry: the input method first (dead keys, Compose, CJK), then
+        # the editing keys; everything else is swallowed while typing
+        if self.typing is not None:
+            event = ctrl.get_current_event()
+            if event is not None and self.im.filter_keypress(event):
+                return True
+            if ctrl_held and keyval in (Gdk.KEY_v, Gdk.KEY_V):
+                self.paste_text(); return True
+            if ctrl_held:
+                pass                                      # Ctrl+C, Ctrl+S, Ctrl+Z ... below
+            elif keyval == Gdk.KEY_Escape:
+                self.cancel_text(); return True
+            elif keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter):
                 self.commit_text(); return True
-            if keyval == Gdk.KEY_BackSpace:
+            elif keyval == Gdk.KEY_BackSpace:
                 self.typing["text"] = self.typing["text"][:-1]; self.area.queue_draw(); return True
-            u = Gdk.keyval_to_unicode(keyval)
-            if u and chr(u).isprintable():
-                self.typing["text"] += chr(u); self.area.queue_draw(); return True
-            return True
+            else:
+                u = Gdk.keyval_to_unicode(keyval)         # fallback when no IM consumed the key
+                if u and chr(u).isprintable():
+                    self.typing["text"] += chr(u); self.area.queue_draw()
+                return True
         if keyval == Gdk.KEY_Escape:
             if self.crop_pending is not None:
                 self.crop_pending = None; self.sync_toolbar(); self.area.queue_draw()
