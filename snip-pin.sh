@@ -83,11 +83,38 @@ case "${1:-}" in
         notify "History cleared ($n snips removed)"
         exit 0 ;;
     clipboard)
-        if ! wl-paste --list-types 2>/dev/null | grep -qx 'image/png'; then
+        # PNG when offered, else the first image type GdkPixbuf can read, else
+        # a copied local image file (text/uri-list); everything lands in the
+        # cache as PNG so the history, `last` and the export treat it alike.
+        types=$(wl-paste --list-types 2>/dev/null)
+        mime=$(grep -m1 -x 'image/png' <<< "$types" || grep -m1 -E '^image/(jpeg|webp|bmp|gif|tiff|x-portable-pixmap)$' <<< "$types")
+        src=""
+        if [[ -n "$mime" ]]; then
+            src=$(mktemp)
+            wl-paste --type "$mime" > "$src" || { rm -f "$src"; exit 1; }
+        elif grep -qx 'text/uri-list' <<< "$types"; then
+            uri=$(wl-paste --type text/uri-list 2>/dev/null | head -1 | tr -d '\r')
+            # file:///a/b%20c -> /a/b c (a back-reference: parameter expansion cannot do it)
+            # shellcheck disable=SC2001
+            [[ "$uri" == file://* ]] && src=$(printf '%b' "$(sed 's/%\([0-9A-Fa-f]\{2\}\)/\\x\1/g' <<< "${uri#file://}")")
+            [[ -f "$src" ]] || { notify "The clipboard holds no image"; exit 0; }
+        else
             notify "The clipboard holds no image"; exit 0
         fi
         file="$CACHE/$(date +%Y%m%d_%H%M%S_%N)_clipboard.png"
-        wl-paste --type image/png > "$file" || exit 1
+        if [[ "$(head -c 8 "$src" | od -An -tx1 | tr -d ' \n')" == 89504e470d0a1a0a ]]; then
+            if [[ -n "$mime" ]]; then mv "$src" "$file"; else cp "$src" "$file"; fi
+        else
+            python3 - "$src" "$file" <<'PY' || { notify "The clipboard image cannot be read"; [[ -n "$mime" ]] && rm -f "$src"; exit 1; }
+import sys, warnings
+warnings.filterwarnings("ignore")
+import gi
+gi.require_version("GdkPixbuf", "2.0")
+from gi.repository import GdkPixbuf
+GdkPixbuf.Pixbuf.new_from_file(sys.argv[1]).savev(sys.argv[2], "png", [], [])
+PY
+            [[ -n "$mime" ]] && rm -f "$src"
+        fi
         pin_file "$file"
         exit 0 ;;
     "")

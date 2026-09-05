@@ -193,3 +193,74 @@ def test_abort_ends_only_our_slurp(tmp_path):
     # no state file at all: still a clean exit
     (state / "slurp").unlink()
     assert run(["abort"], env).returncode == 0
+
+
+def fake_wl_paste(tmp_path, types, payloads):
+    """wl-paste stub: --list-types prints TYPES, --type X cats payloads[X]."""
+    b = tmp_path / "bin"
+    b.mkdir(exist_ok=True)
+    cases = "".join(f'"{t}") cat "{p}";;\n' for t, p in payloads.items())
+    (b / "wl-paste").write_text('#!/bin/sh\nif [ "$1" = "--list-types" ]; then printf "%s\\n" '
+                                + " ".join(f'"{t}"' for t in types) + '; exit 0; fi\n'
+                                'case "$2" in\n' + cases + '*) exit 1;;\nesac\n')
+    (b / "wl-paste").chmod(0o755)
+    return b
+
+
+def make_jpeg(path):
+    import gi
+    gi.require_version("GdkPixbuf", "2.0")
+    from gi.repository import GdkPixbuf
+    pb = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, False, 8, 24, 16)
+    pb.fill(0x336699FF)
+    pb.savev(str(path), "jpeg", [], [])
+
+
+def png_header(path):
+    with open(path, "rb") as f:
+        return f.read(8) == b"\x89PNG\r\n\x1a\n"
+
+
+def test_clipboard_png_is_cached_and_pinned(tmp_path):
+    log = tmp_path / "viewer.log"
+    env = make_env(tmp_path, log)
+    src = tmp_path / "src.png"
+    src.write_bytes(b"\x89PNG\r\n\x1a\n" + b"rest")
+    env["PATH"] = f"{fake_wl_paste(tmp_path, ['text/plain', 'image/png'], {'image/png': src})}:{env['PATH']}"
+    assert run(["clipboard"], env).returncode == 0
+    args = wait_for(log)
+    assert args[0].endswith("_clipboard.png") and len(args) == 1 and png_header(args[0])
+
+
+def test_clipboard_jpeg_is_converted(tmp_path):
+    log = tmp_path / "viewer.log"
+    env = make_env(tmp_path, log)
+    src = tmp_path / "src.jpg"
+    make_jpeg(src)
+    env["PATH"] = f"{fake_wl_paste(tmp_path, ['image/jpeg'], {'image/jpeg': src})}:{env['PATH']}"
+    r = run(["clipboard"], env)
+    assert r.returncode == 0, r.stderr
+    args = wait_for(log)
+    assert args[0].endswith("_clipboard.png") and png_header(args[0])
+
+
+def test_clipboard_uri_list_to_a_local_file(tmp_path):
+    log = tmp_path / "viewer.log"
+    env = make_env(tmp_path, log)
+    img = tmp_path / "my pic.jpg"
+    make_jpeg(img)
+    uris = tmp_path / "uris.txt"
+    uris.write_text(f"file://{str(img).replace(' ', '%20')}\r\n")
+    env["PATH"] = f"{fake_wl_paste(tmp_path, ['text/uri-list'], {'text/uri-list': uris})}:{env['PATH']}"
+    r = run(["clipboard"], env)
+    assert r.returncode == 0, r.stderr
+    args = wait_for(log)
+    assert png_header(args[0]) and img.exists()          # the original is left alone
+
+
+def test_clipboard_without_an_image(tmp_path):
+    env = make_env(tmp_path, tmp_path / "viewer.log")
+    env["PATH"] = f"{fake_wl_paste(tmp_path, ['text/plain'], {})}:{env['PATH']}"
+    assert run(["clipboard"], env).returncode == 0
+    assert not (tmp_path / "viewer.log").exists()
+    assert not list((tmp_path / "cache" / "snip-pin").glob("*.png"))
