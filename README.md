@@ -157,9 +157,13 @@ Everything is read from the environment of the bound command.
 | `SNIP_PIN_KEEP_DAYS` | `7` | days to keep snips; `0` keeps them forever |
 | `SNIP_PIN_TAP_MS` | `300` | double-tap window for opening the history |
 | `SNIP_PIN_BORDER` | `#ff9f1c` | colour of the 2 px border a pin draws around itself |
+| `SNIP_PIN_SAVE_DIR` | unset | where `Ctrl+S` saves; `~` and `$VARS` are expanded |
+| `SNIP_ELEMENTS_BUDGET_MS` | `150` | time the element detector may spend joining edges |
 
-`Ctrl+S` saves to the folder named in `~/.config/ml4w/settings/screenshot-folder`
-if that file exists (ML4W dotfiles), otherwise to `~/Pictures`.
+Without `SNIP_PIN_SAVE_DIR`, `Ctrl+S` saves to the folder named in
+`~/.config/ml4w/settings/screenshot-folder` if that file exists (ML4W
+dotfiles), otherwise to the XDG pictures directory (`~/Pictures` or its
+localised name).
 
 <details>
 <summary>Design notes and testing</summary>

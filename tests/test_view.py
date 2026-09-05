@@ -26,17 +26,28 @@ def test_unique_path(tmp_path, view):
 
 def test_screenshot_folder_default(tmp_path, view, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
-    assert view.screenshot_folder() == str(tmp_path / "Pictures")
+    monkeypatch.delenv("SNIP_PIN_SAVE_DIR", raising=False)
+    # GLib caches the special dirs per process; with no user-dirs.dirs it answers ~/Pictures (or None)
+    got = view.screenshot_folder()
+    assert got.endswith("Pictures") or got.endswith("Bilder")
+
+
+def test_screenshot_folder_env_wins(tmp_path, view, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("SNIP_PIN_SAVE_DIR", "~/Shots/$USER")
+    monkeypatch.setenv("USER", "me")
+    assert view.screenshot_folder() == str(tmp_path / "Shots" / "me")
 
 
 def test_screenshot_folder_ml4w(tmp_path, view, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("SNIP_PIN_SAVE_DIR", raising=False)
     cfg = tmp_path / ".config/ml4w/settings"
     cfg.mkdir(parents=True)
     (cfg / "screenshot-folder").write_text("~/Shots\n")
     assert view.screenshot_folder() == str(tmp_path / "Shots")
     (cfg / "screenshot-folder").write_text("\n")                      # empty: fall back
-    assert view.screenshot_folder() == str(tmp_path / "Pictures")
+    assert view.screenshot_folder() != str(tmp_path / "Shots")
 
 
 def test_notify_without_libnotify_is_a_noop(view, monkeypatch):
