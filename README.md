@@ -124,6 +124,7 @@ draw with the left mouse button; with no tool selected the pin moves as usual.
 | Counter | `N` | click to place a numbered badge: 1, 2, 3 …; undo takes the number back |
 | Marker | `M` | wide, semi-transparent highlighter |
 | Blur | `B` | pixelates a rectangle, for hiding secrets |
+| Crop | `C` | drag the part to keep, `Enter` applies, `Esc` cancels; undoable, the window shrinks in place |
 
 Colour: `1`–`7` or the swatches. Stroke width: `[` / `]` or the three dots
 (also sets text size and blur block size). Undo / redo: `Ctrl+Z` /

@@ -275,3 +275,32 @@ def test_degenerate_ellipse_and_counter_do_not_raise(tmp_path, view):
     ops = [{"kind": "ellipse", "pts": [(5, 5), (5, 30)], "color": (0, 0, 1), "width": 2, "text": ""},
            {"kind": "counter", "pts": [(-5, 50)], "color": (0, 0, 0), "width": 7, "text": ""}]   # no "n": defaults to 1
     view.render_png(pb, ops, str(tmp_path / "o.png"))
+
+
+def test_shift_ops_moves_points_and_drops_mosaic_cache(view):
+    ops = [{"kind": "rect", "pts": [(10, 10), (20, 30)], "_mosaic": ("k", None)},
+           {"kind": "crop", "pts": [], "dx": 5, "dy": 5}]
+    view.shift_ops(ops, -3, 4)
+    assert ops[0]["pts"] == [(7, 14), (17, 34)] and "_mosaic" not in ops[0]
+    assert ops[1] == {"kind": "crop", "pts": [], "dx": 5, "dy": 5}
+
+
+def test_crop_rect_clips_and_rejects_tiny(tmp_path, view):
+    from gi.repository import GdkPixbuf
+    src = tmp_path / "s.png"
+    make_png(str(src), 100, 50)
+    pb = GdkPixbuf.Pixbuf.new_from_file(str(src))
+    assert view.crop_rect(pb, [(-10, -10), (60.4, 30.6)]) == (0, 0, 60, 31)
+    assert view.crop_rect(pb, [(90, 40), (200, 200)]) == (90, 40, 10, 10)
+    assert view.crop_rect(pb, [(10, 10), (12, 40)]) is None
+    assert view.crop_rect(pb, [(30, 30), (10, 10)]) == (10, 10, 20, 20)     # any drag direction
+
+
+def test_render_skips_crop_markers(tmp_path, view):
+    from gi.repository import GdkPixbuf
+    src = tmp_path / "s.png"
+    make_png(str(src), 40, 40)
+    pb = GdkPixbuf.Pixbuf.new_from_file(str(src))
+    marker = {"kind": "crop", "pts": [], "color": (0, 0, 0), "width": 2, "text": ""}
+    view.render_png(pb, [marker], str(tmp_path / "o.png"))
+    assert png_size(str(tmp_path / "o.png")) == (40, 40)
