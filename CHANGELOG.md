@@ -8,6 +8,11 @@ layout) may still change.
 
 ## [Unreleased]
 
+## [0.2.0] – 2026-09-06
+
+Every monitor, scaled outputs, and the robustness items from the review;
+all changes verified on Hyprland 0.56.2 except the HiDPI one.
+
 ### Added
 - `snip-pin.sh doctor` lists the required and optional tools, the GTK, numpy and Hyprland versions and the config style; `install.sh` runs it at the end (#24).
 - `snip-pin.sh clipboard` pins JPEG, WebP, BMP, GIF and TIFF clipboard images and copied image files (`text/uri-list`), not only PNG; they are converted into the cache as PNG (#17).
@@ -77,5 +82,6 @@ the issues below and fixed the ones in this milestone.
 - A JPEG or WebP opened with `pin FILE` is re-encoded as PNG when copied or
   saved; before, the raw file was sent to the clipboard labelled `image/png`.
 
-[Unreleased]: https://github.com/felsenuboot/snip-pin/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/felsenuboot/snip-pin/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/felsenuboot/snip-pin/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/felsenuboot/snip-pin/releases/tag/v0.1.0
