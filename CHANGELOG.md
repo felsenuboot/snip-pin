@@ -13,6 +13,7 @@ layout) may still change.
 - `SNIP_PIN_SAVE_DIR` chooses the save folder; without it the XDG pictures directory (localised) is used after the ML4W setting (#16).
 
 ### Fixed
+- Touchpad scrolling zooms and fades in single steps instead of bursts: smooth-scroll events accumulate, one step per 30 units; the wheel keeps one step per notch. The pin briefly shows the zoom or opacity percentage (#21).
 - Window snapping offers the windows on every monitor's visible workspace (and an open special workspace), not only the focused monitor's (#14).
 - Right-click and the double tap end only the slurp that snip-pin started (by PID, through the new `abort` subcommand), not every slurp on the system (#20).
 - `snip-pin.sh` validates `SNIP_PIN_KEEP_DAYS` and `SNIP_PIN_TAP_MS` (non-numbers fall back to the defaults instead of bash errors), tolerates a corrupt double-tap state file, runs under `set -u -o pipefail`, and cannot leak its temp file on an early exit (#23).
