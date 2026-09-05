@@ -9,6 +9,7 @@ layout) may still change.
 ## [Unreleased]
 
 ### Fixed
+- Element detection is bounded: a spreadsheet or a terminal full of box-drawing lines took up to 3 s with the screen frozen; the join now runs longest-first with a 150 ms budget and a pair window, and `snip-pin.sh` stops waiting after 0.6 s. An empty capture no longer makes the helper raise (#9).
 - Thin snips (a single line of text) are no longer stretched to 40 px: the minimum size applies to the scale, not to each side, and annotations on such pins land where the pointer is (#8).
 - Two pins saved within the same second no longer overwrite each other (`pin_..._2.png`), and a save that fails (unwritable folder, full disk) shows the error and keeps the pin open instead of dying with a traceback (#10).
 - A missing, truncated or non-image file (a snip deleted before `last`, a bad clipboard image, `pin FILE` on a text file) shows a "Cannot open" toast instead of crashing the viewer silently and making the next pin wait three seconds (#7).
@@ -21,6 +22,7 @@ First tagged release. Everything before it was developed on `main` without
 version numbers between 2026-09-02 and 2026-09-05.
 
 ### Added
+- `SNIP_ELEMENTS_BUDGET_MS` to tune the detection budget.
 - Snip a region, a window or an element inside a window and pin it where it
   was taken; drag, zoom, fade, copy, save.
 - Annotations on the pin: rectangle, arrow, pen, text, marker, blur.

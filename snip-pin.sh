@@ -100,9 +100,11 @@ else
     # Element snapping: grab the screen and look for rectangles (images, panels,
     # table cells) while the freeze and the window list are prepared. Needs
     # python-numpy; without it the helper fails quietly and only windows snap.
+    # The detector bounds its own work (about 150 ms); the timeout is the
+    # backstop so a stuck helper can never hold the frozen screen.
     elems=$(mktemp)
     if [[ -z "$SNIP_NO_ELEMENTS" ]]; then
-        (grim -s 1 -t ppm - | "$HERE/snip-elements.py" > "$elems") 2>/dev/null &
+        (grim -s 1 -t ppm - | timeout 0.6 "$HERE/snip-elements.py" > "$elems") 2>/dev/null &
         pid_detect=$!
     fi
 
