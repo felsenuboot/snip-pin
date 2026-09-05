@@ -13,6 +13,7 @@ layout) may still change.
 - `SNIP_PIN_SAVE_DIR` chooses the save folder; without it the XDG pictures directory (localised) is used after the ML4W setting (#16).
 
 ### Fixed
+- The viewer's hand-over socket is an abstract Unix socket: nothing stale survives a crash, a stuck viewer is never taken over by a second one, a stalled client can no longer freeze the pins for three seconds, and a hand-over that arrives while the last pin is closing is refused immediately instead of timing out (#19).
 - The history picker decodes thumbnails on a worker thread and caches them in `~/.cache/snip-pin/thumbs`, so a large history no longer stutters for seconds; snips older than six days show their date (#18).
 - Touchpad scrolling zooms and fades in single steps instead of bursts: smooth-scroll events accumulate, one step per 30 units; the wheel keeps one step per notch. The pin briefly shows the zoom or opacity percentage (#21).
 - Window snapping offers the windows on every monitor's visible workspace (and an open special workspace), not only the focused monitor's (#14).

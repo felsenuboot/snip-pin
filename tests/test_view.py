@@ -124,3 +124,87 @@ def test_scroll_steps_smooth_accumulates(view):
     assert sum(steps) == 2 and max(steps) <= 1 and 0 <= acc < view.SMOOTH_STEP
     st, acc = view.scroll_steps(False, -100.0, 0.0)                 # a big negative delta: whole steps only
     assert st == -3 and abs(acc - (-10.0)) < 1e-9
+
+
+class FakeApp:
+    """Enough of Gtk.Application for serve(): windows, signals, an attribute slot."""
+    def __init__(self):
+        self.windows = [object()]
+        self.handlers = {}
+
+    def get_windows(self):
+        return self.windows
+
+    def connect(self, name, cb):
+        self.handlers[name] = cb
+
+
+def run_loop_until(pred, timeout=3.0):
+    import time as _t
+    from gi.repository import GLib
+    ctx = GLib.MainContext.default()
+    end = _t.monotonic() + timeout
+    while _t.monotonic() < end:
+        if pred():
+            return True
+        ctx.iteration(False)
+        _t.sleep(0.005)
+    return False
+
+
+def test_serve_and_hand_over(view, monkeypatch, tmp_path):
+    import socket
+    import threading
+    # a private socket name so the test never talks to a real viewer
+    monkeypatch.setattr(view, "SOCKET", "\0snip-pin-test-%d" % os.getpid() if os.name != "nt" else str(tmp_path / "s"))
+    got = []
+    monkeypatch.setattr(view, "open_pin", lambda app, args: got.append(args) or True)
+    app = FakeApp()
+    assert view.serve(app) is True
+    assert view.serve(FakeApp()) is False                      # the name is taken by a live server
+    result = []
+    t = threading.Thread(target=lambda: result.append(view.hand_over(["/x/a.png", "10", "20"])))
+    t.start()
+    assert run_loop_until(lambda: got)
+    t.join(2)
+    assert result == [True] and got == [["/x/a.png", "10", "20"]]
+    # garbage and a stalled client are acknowledged (so the client does not start GTK) and ignored
+    c = socket.socket(socket.AF_UNIX)
+    c.connect(view.SOCKET)
+    c.sendall(b"{not json\n")
+    c.setblocking(False)                                        # poll without ever blocking the loop
+    ack = []
+
+    def acked():
+        try:
+            ack.append(c.recv(1))
+        except BlockingIOError:
+            return False
+        return True
+    assert run_loop_until(acked, 2) and ack == [b"1"]
+    assert got == [["/x/a.png", "10", "20"]]
+    c.close()
+    stalled = socket.socket(socket.AF_UNIX)
+    stalled.connect(view.SOCKET)
+    assert run_loop_until(lambda: False, 0.4) is False          # loop turns while the client says nothing
+    assert got == [["/x/a.png", "10", "20"]]
+    stalled.close()
+    # the last window closing stops the server: a hand-over is refused at once
+    app.windows.clear()
+    app.handlers["window-removed"](app, None)
+    assert view.hand_over(["/x/b.png"]) is False
+
+
+def test_read_request_validates(view):
+    import socket
+    a, b = socket.socketpair()
+    b.sendall(b'["/p.png", "1", "2"]\n')
+    assert view.read_request(a) == ["/p.png", "1", "2"]
+    b.sendall(b'{"k": 1}\n')
+    assert view.read_request(a) is None
+    b.sendall(b'[1, 2]\n')
+    assert view.read_request(a) is None
+    b.sendall(b'\n')
+    assert view.read_request(a) is None
+    assert view.read_request(a, timeout=0.05) is None          # nothing pending: bounded wait
+    a.close(); b.close()
