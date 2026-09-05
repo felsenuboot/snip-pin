@@ -17,6 +17,7 @@
 #   snip-pin.sh pin FILE   pin an image file, centred (used by the history picker)
 #   snip-pin.sh clear      empty the history (kept snips stay)
 #   snip-pin.sh abort      end the selection this script started (right-click bind)
+#   snip-pin.sh doctor     check the dependencies (exit 1 if a required one is missing)
 #   snip-pin.sh --version  print the version
 # Pressing the snip key twice within SNIP_PIN_TAP_MS (default 300) aborts the
 # selection the first press started and opens the history instead.
@@ -136,9 +137,44 @@ PY
         fi ;;
     abort)
         abort_selection; exit 0 ;;
+    doctor)
+        missing=0
+        check() {   # name, required|optional, what it is for
+            local p; p=$(command -v "$1" 2>/dev/null)
+            if [[ -n "$p" ]]; then printf '  %-12s %s\n' "$1" "$p"
+            else printf '  %-12s MISSING  (%s)\n' "$1" "$3"; [[ "$2" == required ]] && missing=1; fi
+        }
+        echo "snip-pin $(cat "$HERE/VERSION") in $HERE"
+        echo "required:"
+        check grim required "captures the screen"
+        check slurp required "region selection"
+        check wl-copy required "clipboard (wl-clipboard)"
+        check wl-paste required "clipboard (wl-clipboard)"
+        check jq required "reads hyprctl's JSON"
+        check hyprctl required "window list and placement (Hyprland)"
+        check python3 required "the viewer and the picker"
+        if python3 -c 'import gi; gi.require_version("Gtk", "4.0"); from gi.repository import Gtk' 2>/dev/null; then
+            printf '  %-12s %s\n' "GTK 4" "$(python3 -c 'import gi; gi.require_version("Gtk", "4.0"); from gi.repository import Gtk; print(f"{Gtk.get_major_version()}.{Gtk.get_minor_version()}.{Gtk.get_micro_version()}")' 2>/dev/null)"
+        else
+            printf '  %-12s MISSING  (python-gobject and gtk4)\n' "GTK 4"; missing=1
+        fi
+        echo "optional:"
+        check hyprpicker optional "freezes the screen during the selection"
+        check notify-send optional "toasts (libnotify)"
+        if python3 -c 'import numpy' 2>/dev/null; then printf '  %-12s %s\n' "numpy" "$(python3 -c 'import numpy; print(numpy.__version__)')"
+        else printf '  %-12s MISSING  (element snapping; windows still snap)\n' "numpy"; fi
+        if command -v hyprctl >/dev/null && tag=$(hyprctl version -j 2>/dev/null | jq -r '.tag // .version' 2>/dev/null) && [[ -n "$tag" ]]; then
+            # `eval` exists only with a Lua config (it answers "ok"); a classic config rejects it
+            if [[ "$(hyprctl eval 'return 1' 2>/dev/null)" == ok ]]; then style="Lua config"; else style="classic config"; fi
+            echo "hyprland:    $tag, $style"
+        else
+            echo "hyprland:    not running (or hyprctl missing)"
+        fi
+        [[ $missing -eq 0 ]] && echo "all required tools found" || echo "required tools missing" >&2
+        exit $missing ;;
     --version|-V)
         cat "$HERE/VERSION"; exit 0 ;;
-    *)  echo "usage: snip-pin.sh [last|history|clipboard|pin FILE|clear|--version]" >&2
+    *)  echo "usage: snip-pin.sh [last|history|clipboard|pin FILE|clear|doctor|--version]" >&2
         echo "  (no argument: select a region, capture it, pin it)" >&2; exit 2 ;;
 esac
 

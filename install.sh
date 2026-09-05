@@ -59,3 +59,5 @@ StartupWMClass=snip-pin
 DESKTOP
 refresh
 echo "installed $ENTRY and $OPEN_ENTRY"
+echo
+"$HERE/snip-pin.sh" doctor || true      # a missing tool is a hint here, not a failure to install
