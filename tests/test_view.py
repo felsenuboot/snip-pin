@@ -101,7 +101,7 @@ def test_render_png_bakes_ops_at_native_size(tmp_path, view):
     assert at(90, 5) == (255, 255, 255)       # untouched corner stays white
     assert at(85, 10) == (255, 0, 0)          # top of the ellipse (centre 85,25, ry 15)
     assert at(85, 36) == (255, 255, 255)      # inside the ellipse, clear of the marker: an outline
-    assert at(100, 60) != (255, 255, 255)     # the counter badge is filled
+    assert at(89, 60) == (255, 0, 0)          # inside the badge (radius 14), clear of the digit
 
 
 def test_mosaic_pixbuf_clips_to_the_image(tmp_path, view):
