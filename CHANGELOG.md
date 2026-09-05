@@ -9,6 +9,7 @@ layout) may still change.
 ## [Unreleased]
 
 ### Added
+- The text tool takes its input through a GTK input-method context: dead keys, the Compose key and ibus/fcitx input methods (CJK, emoji pickers) work, composing text is shown while typing, and `Ctrl+V` pastes (#30).
 - Crop tool (`C`): drag the part to keep, `Enter` applies, `Esc` cancels. Undo restores the full image; the pin shrinks in place so the kept part stays where it was (#32).
 - Image files dropped onto a pin open as new pins; together with the *Open with → Pin image* entry from 0.1.0 this closes #33.
 - Ellipse tool (`E`) and numbered-step counter (`N`): a click places a badge with the next number; undo takes the number back (#31).
