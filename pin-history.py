@@ -16,6 +16,7 @@ runs `SNIP_PIN_SH pin FILE`.
 """
 import datetime
 import os
+import shutil
 import subprocess
 import sys
 import warnings
@@ -29,6 +30,7 @@ gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk
 
 APP_ID = "snip-pin"          # same class as pins: the float rule applies
+NOTIFY_SEND = shutil.which("notify-send")           # libnotify is optional
 THUMB_W, THUMB_H = 220, 140
 COLUMNS = 4
 MOVE_KEYS = {Gdk.KEY_Left: -1, Gdk.KEY_a: -1, Gdk.KEY_h: -1, Gdk.KEY_Right: 1, Gdk.KEY_d: 1, Gdk.KEY_l: 1,
@@ -192,8 +194,9 @@ class History(Gtk.ApplicationWindow):
         with open(path, "rb") as f:
             subprocess.Popen(["wl-copy", "-t", "image/png"], stdin=f,
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        subprocess.Popen(["notify-send", "-i", "camera-photo-symbolic", "-t", "1500", "Snip", "Copied to clipboard"],
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if NOTIFY_SEND:
+            subprocess.Popen([NOTIFY_SEND, "-i", "camera-photo-symbolic", "-t", "1500", "Snip", "Copied to clipboard"],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         self.close()
 
     def on_rclick(self, gesture, n, x, y):
