@@ -13,6 +13,7 @@ layout) may still change.
 - `SNIP_PIN_SAVE_DIR` chooses the save folder; without it the XDG pictures directory (localised) is used after the ML4W setting (#16).
 
 ### Fixed
+- HiDPI: a snip taken on a scaled output opens at 1/scale, covering exactly the region it was taken from, and `Ctrl+0` returns to that size (#15, untested on real scaled hardware; identical to before at scale 1).
 - Placement talks to Hyprland's IPC socket directly (0.2 ms per request instead of a 10 ms `hyprctl` spawn on the GTK main loop), works with both the Lua (`hl.dsp.window.move`) and the classic (`movewindowpixel`) dispatcher syntax, and keeps a pin taken at the screen edge fully on its monitor (#22).
 - The viewer's hand-over socket is an abstract Unix socket: nothing stale survives a crash, a stuck viewer is never taken over by a second one, a stalled client can no longer freeze the pins for three seconds, and a hand-over that arrives while the last pin is closing is refused immediately instead of timing out (#19).
 - The history picker decodes thumbnails on a worker thread and caches them in `~/.cache/snip-pin/thumbs`, so a large history no longer stutters for seconds; snips older than six days show their date (#18).
