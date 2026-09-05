@@ -189,6 +189,10 @@ if that file exists (ML4W dotfiles), otherwise to `~/Pictures`.
   that region directly; `SNIP_NO_ELEMENTS=1` snaps to windows only;
   `grim -s 1 -t ppm - | ./snip-elements.py --debug out.png` draws the detected
   edges and rectangles onto a copy of the screen.
+- **Tests.** `python -m pytest` (needs `python-pytest`) covers everything that
+  runs without a display: the element detector on synthetic frames, the
+  annotation renderer, the cache listing and the script's subcommands. CI runs
+  it together with Ruff and ShellCheck.
 
 </details>
 

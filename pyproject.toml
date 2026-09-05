@@ -11,3 +11,7 @@ ignore = [
     "E701",  # multiple statements on one line (if x: y)
     "E702",  # multiple statements on one line (x; y)
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]   # Gdk.cairo_set_source_pixbuf, still the simplest way to paint a pixbuf
