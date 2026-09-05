@@ -12,13 +12,16 @@ usage: pin-history.py CACHE_DIR SNIP_PIN_SH
   Clear button    remove every snip that is not kept
 
 Snips are the PNG files in CACHE_DIR and CACHE_DIR/kept, newest first. Pinning
-runs `SNIP_PIN_SH pin FILE`.
+runs `SNIP_PIN_SH pin FILE`. Thumbnails are decoded on a worker thread and
+kept in CACHE_DIR/thumbs (invalidated by the snip's mtime), so a picker with
+hundreds of snips fills at once from the second opening on.
 """
 import datetime
 import os
 import shutil
 import subprocess
 import sys
+import threading
 import warnings
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -59,6 +62,54 @@ def snips(cache):
 
 def is_kept(path):
     return os.path.basename(os.path.dirname(path)) == "kept"
+
+
+def thumb_path(cache, path):
+    return os.path.join(cache, "thumbs", os.path.basename(path))
+
+
+def load_thumb(cache, path):
+    """(thumbnail pixbuf, (full width, full height)), from the thumbs cache when it is
+    newer than the snip; None if the snip cannot be read. Safe to call off the main loop."""
+    t = thumb_path(cache, path)
+    try:
+        mtime = os.path.getmtime(path)
+        if os.path.getmtime(t) >= mtime:
+            pb = GdkPixbuf.Pixbuf.new_from_file(t)
+            w, h = (int(v) for v in pb.get_option("tEXt::snip-size").split("x"))
+            return pb, (w, h)
+    except (OSError, GLib.Error, AttributeError, ValueError):
+        pass                                   # no thumb yet, or a stale/odd one: rebuild
+    try:
+        pb = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, THUMB_W, THUMB_H, True)
+        _, w, h = GdkPixbuf.Pixbuf.get_file_info(path)
+    except (GLib.Error, TypeError):
+        return None
+    try:
+        os.makedirs(os.path.dirname(t), exist_ok=True)
+        pb.savev(t, "png", ["tEXt::snip-size"], [f"{w}x{h}"])
+    except (OSError, GLib.Error):
+        pass                                   # a cache miss costs a decode, nothing more
+    return pb, (w, h)
+
+
+def prune_thumbs(cache, keep):
+    """Drop thumbnails whose snip is gone."""
+    d = os.path.join(cache, "thumbs")
+    names = {os.path.basename(p) for p in keep}
+    try:
+        for f in os.listdir(d):
+            if f not in names:
+                os.remove(os.path.join(d, f))
+    except OSError:
+        pass
+
+
+def label_text(when, size, kept, now=None):
+    """'Tue 14:23 · 800×600' within the last six days, else with the date."""
+    now = now or datetime.datetime.now()
+    fmt = "%a %H:%M" if now - when < datetime.timedelta(days=6) else "%d %b %H:%M"
+    return ("★ " if kept else "") + f"{when:{fmt}}  ·  {size[0]}×{size[1]}"
 
 
 class History(Gtk.ApplicationWindow):
@@ -105,21 +156,23 @@ class History(Gtk.ApplicationWindow):
         rclose.connect("pressed", lambda *a: self.close())
         self.add_controller(rclose)
 
-        self.pending = snips(cache)
-        self.empty.set_visible(not self.pending)
-        # decode thumbnails one per idle tick so the window appears at once
-        GLib.idle_add(self.load_next)
+        files = snips(cache)
+        self.empty.set_visible(not files)
+        # decode on a worker thread (GdkPixbuf needs no GTK), add widgets on
+        # the main loop in file order, so the window appears at once
+        threading.Thread(target=self.load_all, args=(files,), daemon=True).start()
 
-    def load_next(self):
-        if not self.pending:
+    def load_all(self, files):
+        for path in files:
+            res = load_thumb(self.cache, path)
+            if res is not None:
+                GLib.idle_add(self.add_thumb, path, *res)
+        prune_thumbs(self.cache, files)
+
+    def add_thumb(self, path, pb, size):
+        if not os.path.exists(path):                # removed while it was decoding
             return False
-        path = self.pending.pop(0)
-        try:
-            pb = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, THUMB_W, THUMB_H, True)
-            full = GdkPixbuf.Pixbuf.get_file_info(path)
-            w, h = full[1], full[2]
-        except GLib.Error:
-            return True
+        w, h = size
         pic = Gtk.Picture.new_for_paintable(Gdk.Texture.new_for_pixbuf(pb))
         pic.set_size_request(THUMB_W, THUMB_H)
         pic.set_can_shrink(False)
@@ -135,13 +188,12 @@ class History(Gtk.ApplicationWindow):
         if not self.flow.get_selected_children():
             self.flow.select_child(child)
             child.grab_focus()
-        return True
+        return False
 
     def relabel(self, child):
         when = datetime.datetime.fromtimestamp(os.path.getmtime(child.path))
-        w, h = child.size
         kept = is_kept(child.path)
-        child.label.set_label(("★ " if kept else "") + f"{when:%a %H:%M}  ·  {w}×{h}")
+        child.label.set_label(label_text(when, child.size, kept))
         if kept:
             child.box.add_css_class("kept")
         else:
@@ -208,10 +260,11 @@ class History(Gtk.ApplicationWindow):
             self.copy(child.path)
 
     def remove(self, child):
-        try:
-            os.remove(child.path)
-        except OSError:
-            pass
+        for p in (child.path, thumb_path(self.cache, child.path)):
+            try:
+                os.remove(p)
+            except OSError:
+                pass
         idx = child.get_index()
         self.flow.remove(child)
         nxt = self.flow.get_child_at_index(idx) or self.flow.get_child_at_index(max(idx - 1, 0))

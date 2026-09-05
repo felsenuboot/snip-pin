@@ -13,6 +13,7 @@ layout) may still change.
 - `SNIP_PIN_SAVE_DIR` chooses the save folder; without it the XDG pictures directory (localised) is used after the ML4W setting (#16).
 
 ### Fixed
+- The history picker decodes thumbnails on a worker thread and caches them in `~/.cache/snip-pin/thumbs`, so a large history no longer stutters for seconds; snips older than six days show their date (#18).
 - Touchpad scrolling zooms and fades in single steps instead of bursts: smooth-scroll events accumulate, one step per 30 units; the wheel keeps one step per notch. The pin briefly shows the zoom or opacity percentage (#21).
 - Window snapping offers the windows on every monitor's visible workspace (and an open special workspace), not only the focused monitor's (#14).
 - Right-click and the double tap end only the slurp that snip-pin started (by PID, through the new `abort` subcommand), not every slurp on the system (#20).

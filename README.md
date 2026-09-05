@@ -129,7 +129,7 @@ Colour: `1`–`7` or the swatches. Stroke width: `[` / `]` or the three dots
   <img src="docs/history.gif" width="700" alt="The history picker: moving the selection with keys, keeping a snip, deleting one and pinning one">
 </p>
 
-Every snip is kept in `~/.cache/snip-pin` for seven days. Snips you mark as
+Every snip is kept in `~/.cache/snip-pin` for seven days (thumbnails for the picker live in its `thumbs` subfolder). Snips you mark as
 kept (★) move to a `kept` subfolder and never expire. The file name carries
 the capture position, so `last` puts the snip back where it was taken; pins
 opened from the picker appear centred.
