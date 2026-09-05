@@ -26,12 +26,19 @@
 # Testing hooks: SNIP_GEOM=WxH+X+Y skips the interactive selection,
 # SNIP_NO_ELEMENTS=1 disables element snapping.
 
+set -u -o pipefail            # no -e: the abort paths rely on non-zero statuses
 HERE=$(dirname "$(readlink -f "$0")")
 VIEWER="${SNIP_PIN_VIEWER:-$HERE/pin-view.py}"       # override: tests
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/snip-pin"
-KEEP="${SNIP_PIN_KEEP_DAYS:-7}"
 STATE="${XDG_RUNTIME_DIR:-/tmp}/snip-pin"
-TAP_MS="${SNIP_PIN_TAP_MS:-300}"
+SNIP_GEOM="${SNIP_GEOM:-}"
+SNIP_NO_ELEMENTS="${SNIP_NO_ELEMENTS:-}"
+
+# integer settings from the environment; anything else falls back to the default
+int_or() { if [[ "${!1:-}" =~ ^[0-9]+$ ]]; then echo "${!1}"; else echo "$2"; fi; }
+KEEP=$(int_or SNIP_PIN_KEEP_DAYS 7)
+TAP_MS=$(int_or SNIP_PIN_TAP_MS 300)
+
 mkdir -p "$CACHE/kept" "$STATE"
 [[ "$KEEP" -gt 0 ]] && find "$CACHE" -maxdepth 1 -name '*.png' -mtime +"$KEEP" -delete 2>/dev/null
 # baked copies that versions before 0.1.0 left next to the original
@@ -59,7 +66,7 @@ case "${1:-}" in
     history)
         exec "$HERE/pin-history.py" "$CACHE" "$0" ;;
     pin)
-        [[ -f "$2" ]] || exit 1
+        [[ -f "${2:-}" ]] || { echo "usage: snip-pin.sh pin FILE" >&2; exit 1; }
         setsid -f "$VIEWER" "$2" >/dev/null 2>&1
         exit 0 ;;
     clear)
@@ -80,7 +87,9 @@ case "${1:-}" in
         # and open the history instead.
         if [[ -z "$SNIP_GEOM" ]]; then
             now=$(date +%s%3N)
+            other='' started=''
             if [[ -r "$STATE/selecting" ]] && read -r other started < "$STATE/selecting" \
+               && [[ "$other" =~ ^[0-9]+$ && "$started" =~ ^[0-9]+$ ]] \
                && kill -0 "$other" 2>/dev/null && (( now - started < TAP_MS )); then
                 touch "$STATE/abort"
                 pkill -x slurp; sleep 0.05; pkill -x slurp
@@ -91,7 +100,8 @@ case "${1:-}" in
         fi ;;
     --version|-V)
         cat "$HERE/VERSION"; exit 0 ;;
-    *)  echo "usage: snip-pin.sh [last|history|clipboard|pin FILE|clear|--version]" >&2; exit 2 ;;
+    *)  echo "usage: snip-pin.sh [last|history|clipboard|pin FILE|clear|--version]" >&2
+        echo "  (no argument: select a region, capture it, pin it)" >&2; exit 2 ;;
 esac
 
 if [[ -n "$SNIP_GEOM" ]]; then
@@ -102,6 +112,17 @@ else
     # python-numpy; without it the helper fails quietly and only windows snap.
     # The detector bounds its own work (about 150 ms); the timeout is the
     # backstop so a stuck helper can never hold the frozen screen.
+    elems='' pid_detect='' pid_freeze='' lua_cfg=''
+    cleanup() {
+        [[ -n "$pid_freeze" ]] && kill "$pid_freeze" 2>/dev/null
+        rm -f "$elems" "$STATE/selecting" "$STATE/abort"
+        if [[ -n "$lua_cfg" ]]; then
+            hyprctl eval 'hl.unbind("mouse:274")' >/dev/null 2>&1
+        else
+            hyprctl keyword unbind ", mouse:274" >/dev/null 2>&1
+        fi
+    }
+    trap cleanup EXIT
     elems=$(mktemp)
     if [[ -z "$SNIP_NO_ELEMENTS" ]]; then
         (grim -s 1 -t ppm - | timeout 0.6 "$HERE/snip-elements.py" > "$elems") 2>/dev/null &
@@ -116,16 +137,6 @@ else
     # Right-click aborts the selection. slurp treats every mouse button alike,
     # so a temporary Hyprland bind swallows the press and ends slurp instead.
     # Hyprland with a Lua config rejects `keyword`; it takes `eval` instead.
-    cleanup() {
-        [[ -n "$pid_freeze" ]] && kill "$pid_freeze" 2>/dev/null
-        rm -f "$elems" "$STATE/selecting" "$STATE/abort"
-        if [[ -n "$lua_cfg" ]]; then
-            hyprctl eval 'hl.unbind("mouse:274")' >/dev/null 2>&1
-        else
-            hyprctl keyword unbind ", mouse:274" >/dev/null 2>&1
-        fi
-    }
-    trap cleanup EXIT
     if hyprctl keyword bind ", mouse:274, exec, pkill -x slurp" 2>&1 | grep -q non-legacy; then
         lua_cfg=1
         hyprctl eval 'hl.bind("mouse:274", hl.dsp.exec_cmd("pkill -x slurp"))' >/dev/null 2>&1
