@@ -67,7 +67,9 @@ from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk, Pango, PangoCairo
 
 APP_ID = "snip-pin"
 ZOOM_STEP = 1.10
-MIN_PX = 40
+MIN_PX = 40                                        # the pin's longer side never shrinks below this
+MIN_SIDE = 4                                       # ... and the shorter side stays grabbable
+MAX_SCALE = 8.0
 BORDER = 2                                         # px, drawn by the viewer itself
 BORDER_COLOR = os.environ.get("SNIP_PIN_BORDER", "#ff9f1c")
 EDIT_COLOR = "#3fa7ff"                             # border tint while a tool is active
@@ -344,8 +346,10 @@ class Pin(Gtk.ApplicationWindow):
 
     # ---- geometry -------------------------------------------------------
     def apply_scale(self):
-        w = max(MIN_PX, round(self.iw * self.scale))
-        h = max(MIN_PX, round(self.ih * self.scale))
+        # both sides from the same scale: clamping each side on its own
+        # stretched thin snips (a line of text at 800x18 became 800x40)
+        w = max(1, round(self.iw * self.scale))
+        h = max(1, round(self.ih * self.scale))
         self.area.set_content_width(w)
         self.area.set_content_height(h)
         self.set_default_size(w, h)
@@ -383,14 +387,16 @@ class Pin(Gtk.ApplicationWindow):
             self.toolbar.popdown()
         return False
 
+    def min_scale(self):
+        return max(MIN_PX / max(self.iw, self.ih), MIN_SIDE / min(self.iw, self.ih))
+
     def set_scale(self, s):
-        self.scale = max(MIN_PX / max(self.iw, self.ih), min(s, 8.0))
+        self.scale = max(self.min_scale(), min(s, MAX_SCALE))
         self.apply_scale()
 
     def to_img(self, x, y):
         """Widget coordinates -> image coordinates."""
-        f = self.area.get_width() / self.iw
-        return (x / f, y / f)
+        return (x * self.iw / self.area.get_width(), y * self.ih / self.area.get_height())
 
     def draw(self, area, cr, w, h):
         cr.scale(w / self.iw, h / self.ih)
