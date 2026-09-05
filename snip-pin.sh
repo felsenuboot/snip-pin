@@ -16,6 +16,7 @@
 #   snip-pin.sh clipboard  pin the image in the clipboard
 #   snip-pin.sh pin FILE   pin an image file, centred (used by the history picker)
 #   snip-pin.sh clear      empty the history (kept snips stay)
+#   snip-pin.sh --version  print the version
 # Pressing the snip key twice within SNIP_PIN_TAP_MS (default 300) aborts the
 # selection the first press started and opens the history instead.
 # Snips are kept in ~/.cache/snip-pin for SNIP_PIN_KEEP_DAYS days (default 7,
@@ -86,7 +87,9 @@ case "${1:-}" in
             rm -f "$STATE/abort"
             echo "$$ $now" > "$STATE/selecting"
         fi ;;
-    *)  echo "usage: snip-pin.sh [last|history|clipboard|pin FILE]" >&2; exit 2 ;;
+    --version|-V)
+        cat "$HERE/VERSION"; exit 0 ;;
+    *)  echo "usage: snip-pin.sh [last|history|clipboard|pin FILE|clear|--version]" >&2; exit 2 ;;
 esac
 
 if [[ -n "$SNIP_GEOM" ]]; then
