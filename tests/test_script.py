@@ -772,7 +772,7 @@ def test_frames_are_kept_and_offered_to_the_overlay(tmp_path):
     assert len(pngs) == 1 and (frames / (pngs[0].stem + ".json")).exists()
     import json
     meta = json.loads((frames / (pngs[0].stem + ".json")).read_text())
-    assert meta["origin"] == [0, 0] and [10, 20, 300, 200] in meta["windows"]
+    assert meta["origin"] == [0, 0] and [10, 20, 300, 200] in meta["windows"] and meta["select"] == "4x2+1+1"
     assert json.loads((tmp_path / "input.json").read_text())["frames"] == []      # the first snip had none
     # the second snip is offered the first one's screen
     viewer_log.unlink()
