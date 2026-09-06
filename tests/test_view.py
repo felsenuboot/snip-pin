@@ -443,3 +443,35 @@ def test_pick_filter(view):
     assert view.pick_filter(False, 1.0, 1.0) == cairo.FILTER_GOOD        # not zoomed in: smooth downscale
     assert view.pick_filter(False, 0.5, 1.0) == cairo.FILTER_GOOD
     assert view.pick_filter(False, 2.0, 1.0) == cairo.FILTER_NEAREST
+
+
+def test_ops_json_round_trip_drops_markers_and_caches(view):
+    ops = [{"kind": "arrow", "pts": [(1.5, 2), (3, 4)], "color": (1, 0, 0), "width": 4, "text": "", "_mosaic": "x"},
+           {"kind": "crop", "pts": [], "color": (0, 0, 0), "width": 2, "text": "", "pixbuf": object()},
+           {"kind": "counter", "pts": [(5, 5)], "color": (0, 1, 0), "width": 4, "text": "", "n": 3}]
+    data = view.ops_to_json(ops)
+    assert len(data) == 2 and "_mosaic" not in data[0]
+    back = view.ops_from_json(json_round_trip(data))
+    assert back[0]["pts"] == [(1.5, 2.0), (3.0, 4.0)] and back[0]["color"] == (1, 0, 0)
+    assert back[1]["n"] == 3
+    assert view.ops_from_json([{"bogus": 1}, "junk"]) == []
+
+
+def json_round_trip(x):
+    import json
+    return json.loads(json.dumps(x))
+
+
+def test_closed_entries_newest_first_and_prune(tmp_path, view, monkeypatch):
+    monkeypatch.setattr(view, "CLOSED_DIR", str(tmp_path))
+    for n in ("20260906_100000_000001", "20260906_100000_000003", "20260906_100000_000002"):
+        (tmp_path / f"{n}.json").write_text("{}")
+        (tmp_path / f"{n}.png").write_bytes(b"")
+    entries = view.closed_entries()
+    assert [os.path.basename(j) for j, _ in entries] == ["20260906_100000_000003.json", "20260906_100000_000002.json",
+                                                         "20260906_100000_000001.json"]
+    view.prune_closed(1)
+    assert sorted(os.listdir(tmp_path)) == ["20260906_100000_000003.json", "20260906_100000_000003.png"]
+    monkeypatch.setattr(view, "CLOSED_DIR", str(tmp_path / "missing"))
+    assert view.closed_entries() == []
+    assert view.ACTIONS["destroy"] == "shift+Escape" and "--reopen" in view.COMMANDS
