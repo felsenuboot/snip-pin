@@ -24,6 +24,7 @@ layout) may still change.
 - The wheel zooms around the pointer: the image point under the cursor stays put and the pin moves (`zoom_at_pointer = 0` for the old behaviour). "Smooth scaling" in the menu (`smooth = 0` in the config) switches to nearest-neighbour when zoomed in, for pixel-exact inspection (#68).
 - `snip-pin.sh reopen` brings the last closed pin back where it was, with zoom, opacity and annotations (crop and rotation baked in); the last `reopen` = 5 closed pins are kept for the session, and it works after the viewer process has ended. `Shift+Esc` destroys a pin for good (#69).
 - `opacity` sets the starting opacity of every pin (`Ctrl+1` returns to it) and `alpha_bg` what shows behind transparent images: the desktop, a checkerboard or a colour (#72).
+- Thumbnail mode: `Ctrl+M` or `Shift` + double-click collapses a pin into a `thumb_size` (75 px) tile at its corner, a click brings it back; with a crop marquee drawn, `Shift+Enter` shows only that part as the tile (#66).
 
 ## [0.3.0] – 2026-09-06
 

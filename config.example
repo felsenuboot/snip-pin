@@ -27,6 +27,7 @@ smooth = 1                    # bilinear scaling; 0 draws crisp pixel blocks whe
 reopen = 5                    # closed pins `snip-pin.sh reopen` can bring back; 0 turns it off
 opacity = 100                 # starting opacity of a pin, 10-100; Ctrl+1 returns to it
 alpha_bg = transparent        # behind transparent images: transparent (desktop shows through), checker, or #rrggbb
+thumb_size = 75               # side of the tile a pin collapses into (Ctrl+M, Shift + double-click)
 
 [keys]
 # action = binding [binding ...]; modifiers ctrl, shift, alt, super; an empty
@@ -48,6 +49,7 @@ alpha_bg = transparent        # behind transparent images: transparent (desktop 
 #flip_h = ctrl+h
 #flip_v = ctrl+j
 #smooth =                     # toggle smooth scaling
+#thumbnail = ctrl+m shift+Return   # collapse into a tile; with a crop marquee, only that part
 #click_through = ctrl+t       # the pin ignores the mouse until `snip-pin.sh clickthrough` (a bind) undoes it
 #width_down = bracketleft
 #width_up = bracketright
@@ -64,7 +66,9 @@ alpha_bg = transparent        # behind transparent images: transparent (desktop 
 #color_1 = 1                  # ... color_7 = 7
 
 [mouse]
-# right, double and middle click: copy, save, close, destroy, menu, reset, reset_zoom or none
+# right, double, shift_double and middle click: copy, save, close, destroy, menu,
+# reset, reset_zoom, thumbnail or none
 #right = copy
 #double = copy
+#shift_double = thumbnail
 #middle = menu
