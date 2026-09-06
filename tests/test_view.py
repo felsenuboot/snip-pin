@@ -366,9 +366,9 @@ def test_default_keymap_has_no_conflicts_and_overrides_apply(view, capsys):
 
 
 def test_mouse_map_defaults_and_overrides(view, capsys):
-    assert view.build_mouse({}) == {"right": "copy", "double": "copy", "middle": "menu"}
+    assert view.build_mouse({}) == {"right": "copy", "double": "copy", "shift_double": "thumbnail", "middle": "menu"}
     m = view.build_mouse({"right": "menu", "double": "close", "middle": "bogus", "left": "copy"})
-    assert m == {"right": "menu", "double": "close", "middle": "menu"}
+    assert m == {"right": "menu", "double": "close", "shift_double": "thumbnail", "middle": "menu"}
     assert "bogus" in capsys.readouterr().err
 
 
@@ -491,3 +491,14 @@ def test_display_settings(view, monkeypatch):
     monkeypatch.setenv("SNIP_PIN_OPACITY", "x")
     assert view.default_opacity() == 1.0
     assert view.checker_pattern() is view.checker_pattern()
+
+
+def test_thumbnail_helpers(view, monkeypatch):
+    assert view.thumb_scale(914, 404, 75) == 75 / 914
+    assert view.thumb_scale(0, 0, 75) == 75
+    monkeypatch.setenv("SNIP_PIN_THUMB_SIZE", "120")
+    assert view.thumb_size() == 120
+    monkeypatch.setenv("SNIP_PIN_THUMB_SIZE", "x")
+    assert view.thumb_size() == 75
+    assert view.MOUSE_DEFAULTS["shift_double"] == "thumbnail" and "thumbnail" in view.MOUSE_ACTIONS
+    assert view.ACTIONS["thumbnail"] == "ctrl+m shift+Return"

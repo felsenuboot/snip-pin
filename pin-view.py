@@ -335,13 +335,14 @@ ACTIONS = {
     "undo": "ctrl+z", "redo": "ctrl+shift+z ctrl+y",
     "reset": "ctrl+0", "reset_zoom": "", "reset_opacity": "ctrl+1", "click_through": "ctrl+t",
     "rotate_cw": "ctrl+r", "rotate_ccw": "ctrl+shift+r", "flip_h": "ctrl+h", "flip_v": "ctrl+j", "smooth": "",
+    "thumbnail": "ctrl+m shift+Return",
     "width_down": "bracketleft", "width_up": "bracketright", "menu": "F10",
 }
 ACTIONS.update({f"tool_{tool}": key.lower() for tool, key, _, _ in TOOLS})
 ACTIONS.update({f"color_{i + 1}": str(i + 1) for i in range(len(COLORS))})
 # what the mouse does; [mouse] in the config file overrides ("right = menu")
-MOUSE_DEFAULTS = {"right": "copy", "double": "copy", "middle": "menu"}
-MOUSE_ACTIONS = ("copy", "save", "close", "destroy", "menu", "reset", "reset_zoom", "none")
+MOUSE_DEFAULTS = {"right": "copy", "double": "copy", "shift_double": "thumbnail", "middle": "menu"}
+MOUSE_ACTIONS = ("copy", "save", "close", "destroy", "menu", "reset", "reset_zoom", "thumbnail", "none")
 MOD_NAMES = {"ctrl": "CONTROL_MASK", "control": "CONTROL_MASK", "shift": "SHIFT_MASK",
              "alt": "ALT_MASK", "super": "SUPER_MASK", "win": "SUPER_MASK", "meta": "META_MASK"}
 KEY_ALIASES = {"esc": "Escape", "enter": "Return", "del": "Delete", "[": "bracketleft", "]": "bracketright",
@@ -568,6 +569,18 @@ def clamp_to_monitor(monitor, x, y, w, h):
     x = max(mx, min(x, mx + mw - w)) if w <= mw else mx
     y = max(my, min(y, my + mh - h)) if h <= mh else my
     return int(round(x)), int(round(y))
+
+
+def thumb_scale(w, h, size):
+    """Scale that fits a w x h region into a size x size tile."""
+    return size / max(1, w, h)
+
+
+def thumb_size():
+    try:
+        return max(16, int(CFG.get("thumb_size", "75")))
+    except ValueError:
+        return 75
 
 
 def zoom_shift(pointer, img_pt, new_scale):
@@ -833,6 +846,7 @@ class Pin(Gtk.ApplicationWindow):
         self.pending = None           # op being dragged out
         self.typing = None            # text op being typed
         self.crop_pending = None      # (x0, y0, w, h) waiting for Enter
+        self.thumb = None             # thumbnail mode: {"scale": scale before, "region": (x0, y0, w, h) or None}
         self.turns = 0                # net quarter turns clockwise, flips: for "reset"
         self.flipped = {"h": False, "v": False}
         self.address = None           # Hyprland window address once known (placement, crop)
@@ -919,7 +933,7 @@ class Pin(Gtk.ApplicationWindow):
         self.menu = Gtk.PopoverMenu.new_from_model(self.build_menu())
         self.menu.set_parent(self.area)
         self.menu.set_has_arrow(False)
-        for name in ("copy", "save", "reset", "close", "destroy", "undo", "redo", "click_through",
+        for name in ("copy", "save", "reset", "close", "destroy", "undo", "redo", "click_through", "thumbnail",
                      "rotate_cw", "rotate_ccw", "flip_h", "flip_v"):
             act = Gio.SimpleAction.new(name, None)
             act.connect("activate", lambda *a, name=name: self.run_action(name))
@@ -929,11 +943,18 @@ class Pin(Gtk.ApplicationWindow):
         self.add_action(self.smooth_action)
 
     # ---- geometry -------------------------------------------------------
+    def view(self):
+        """The part of the image the window shows: everything, or a thumbnail's region."""
+        if self.thumb is not None and self.thumb["region"] is not None:
+            return self.thumb["region"]
+        return (0, 0, self.iw, self.ih)
+
     def apply_scale(self):
         # both sides from the same scale: clamping each side on its own
         # stretched thin snips (a line of text at 800x18 became 800x40)
-        w = max(1, round(self.iw * self.scale))
-        h = max(1, round(self.ih * self.scale))
+        _, _, vw, vh = self.view()
+        w = max(1, round(vw * self.scale))
+        h = max(1, round(vh * self.scale))
         self.area.set_content_width(w)
         self.area.set_content_height(h)
         self.set_default_size(w, h)
@@ -958,7 +979,7 @@ class Pin(Gtk.ApplicationWindow):
             GLib.source_remove(self.hide_timer)
             self.hide_timer = None
         if entered:
-            if not self.toolbar_shown:
+            if not self.toolbar_shown and self.thumb is None and not self.ghost:
                 self.toolbar_shown = True
                 self.toolbar.popup()
         elif self.toolbar_shown:
@@ -980,7 +1001,8 @@ class Pin(Gtk.ApplicationWindow):
 
     def to_img(self, x, y):
         """Widget coordinates -> image coordinates."""
-        return (x * self.iw / self.area.get_width(), y * self.ih / self.area.get_height())
+        x0, y0, vw, vh = self.view()
+        return (x0 + x * vw / self.area.get_width(), y0 + y * vh / self.area.get_height())
 
     def draw(self, area, cr, w, h):
         if self.ghost:
@@ -991,7 +1013,11 @@ class Pin(Gtk.ApplicationWindow):
             else:
                 cr.set_source_rgb(*hex_to_rgb(self.alpha_bg))
             cr.paint()
-        cr.scale(w / self.iw, h / self.ih)
+        x0, y0, vw, vh = self.view()
+        cr.scale(w / vw, h / vh)
+        cr.translate(-x0, -y0)
+        cr.rectangle(x0, y0, vw, vh)
+        cr.clip()
         Gdk.cairo_set_source_pixbuf(cr, self.pixbuf, 0, 0)
         cr.get_source().set_filter(pick_filter(self.smooth, self.scale, self.base_scale))
         cr.paint()
@@ -1052,6 +1078,37 @@ class Pin(Gtk.ApplicationWindow):
         self.area.queue_draw()
         return False
 
+    # ---- thumbnail -------------------------------------------------------------
+    def set_thumbnail(self, on, region=None):
+        """Collapse the pin into a thumb_size tile (of the whole image, or of `region`
+        in image coordinates) at its top-left corner, or restore the previous size."""
+        c = self.client() if self.address else None
+        if on and self.thumb is None:
+            if self.typing is not None:
+                self.commit_text()
+            self.set_tool(None)
+            if self.toolbar_shown:
+                self.toolbar_shown = False
+                self.toolbar.popdown()
+            self.thumb = {"scale": self.scale, "region": region}
+            _, _, vw, vh = self.view()
+            self.scale = thumb_scale(vw, vh, thumb_size())
+        elif not on and self.thumb is not None:
+            self.scale = max(self.min_scale(), self.thumb["scale"])
+            self.thumb = None
+        else:
+            return
+        self.apply_scale()
+        if c is not None:
+            self.move_to(c["at"][0], c["at"][1])          # Hyprland re-centres on resize; keep the corner
+
+    def toggle_thumbnail(self):
+        if self.thumb is not None:
+            self.set_thumbnail(False)
+        else:
+            region, self.crop_pending = self.crop_pending, None
+            self.set_thumbnail(True, region)
+
     # ---- closing -----------------------------------------------------------------
     def on_close_request(self, *a):
         if not self.destroying and reopen_limit() > 0:
@@ -1068,7 +1125,8 @@ class Pin(Gtk.ApplicationWindow):
             os.makedirs(CLOSED_DIR, exist_ok=True)
             stem = os.path.join(CLOSED_DIR, datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f"))
             self.pixbuf.savev(stem + ".png", "png", [], [])
-            state = {"path": self.path, "pos": list(pos) if pos else None, "scale": self.scale,
+            scale = self.thumb["scale"] if self.thumb is not None else self.scale
+            state = {"path": self.path, "pos": list(pos) if pos else None, "scale": scale,
                      "base_scale": self.base_scale, "opacity": self.opacity, "ops": ops_to_json(self.ops)}
             with open(stem + ".json", "w") as f:
                 json.dump(state, f)
@@ -1276,6 +1334,7 @@ class Pin(Gtk.ApplicationWindow):
             self.transform("flip", "v")
         if self.turns:
             self.transform("rotate", 4 - self.turns)
+        self.set_thumbnail(False)
         self.set_scale(self.base_scale)
         self.opacity = default_opacity()
         self.set_opacity(self.opacity)
@@ -1444,7 +1503,7 @@ class Pin(Gtk.ApplicationWindow):
     # ---- input ------------------------------------------------------------
     def on_drag_begin(self, gesture, x, y):
         self.moving = False
-        if self.tool is None or self.tool in CLICK_TOOLS:
+        if self.tool is None or self.tool in CLICK_TOOLS or self.thumb is not None:
             return
         self.pending = self.new_op(self.tool, self.to_img(x, y))
         self.area.queue_draw()
@@ -1490,8 +1549,12 @@ class Pin(Gtk.ApplicationWindow):
         self.push(op)
 
     def on_click(self, gesture, n, x, y):
+        shift = gesture.get_current_event_state() & Gdk.ModifierType.SHIFT_MASK
         if n == 2:
-            self.mouse_action("double", x, y)
+            self.mouse_action("shift_double" if shift else "double", x, y)
+        elif self.thumb is not None:
+            if n == 1:
+                self.set_thumbnail(False)
         elif self.tool == "text":
             self.commit_text()
             self.start_text(self.to_img(x, y))
@@ -1545,6 +1608,8 @@ class Pin(Gtk.ApplicationWindow):
             self.transform("flip", action[-1])
         elif action == "smooth":
             self.set_smooth(not self.smooth)
+        elif action == "thumbnail":
+            self.toggle_thumbnail()
         elif action == "reset_opacity":
             self.opacity = default_opacity()
             self.set_opacity(self.opacity)
@@ -1569,7 +1634,8 @@ class Pin(Gtk.ApplicationWindow):
                 return False
         elif action.startswith("tool_"):
             tool = action[5:]
-            self.set_tool(None if tool == self.tool else tool)
+            if self.thumb is None:
+                self.set_tool(None if tool == self.tool else tool)
         elif action.startswith("color_"):
             self.set_color(int(action[6:]) - 1)
         elif action == "none":
@@ -1583,7 +1649,7 @@ class Pin(Gtk.ApplicationWindow):
         # per flick; those accumulate and give one step per SMOOTH_STEP units,
         # so one flick no longer zooms 3-5x or fades the pin to nothing.
         steps, self.scroll_acc = scroll_steps(ctrl.get_unit() == Gdk.ScrollUnit.WHEEL, dy, self.scroll_acc)
-        if steps == 0:
+        if steps == 0 or self.thumb is not None:
             return True
         ctrl_held = ctrl.get_current_event_state() & Gdk.ModifierType.CONTROL_MASK
         if ctrl_held:
@@ -1657,6 +1723,7 @@ class Pin(Gtk.ApplicationWindow):
         tr.append(f"Flip vertically\t{key_label('flip_v')}", "win.flip_v")
         m.append_section(None, tr)
         tail = Gio.Menu()
+        tail.append(f"Thumbnail\t{key_label('thumbnail')}", "win.thumbnail")
         tail.append("Smooth scaling", "win.smooth")
         tail.append(f"Reset image\t{key_label('reset')}", "win.reset")
         tail.append(f"Click-through\t{key_label('click_through')}", "win.click_through")

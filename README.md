@@ -140,7 +140,8 @@ accepted.
 | Zoom | mouse wheel or touchpad (10 % steps, around the pointer, the percentage shows briefly) |
 | Opacity | `Ctrl` + wheel, `Ctrl+1` resets |
 | Rotate, flip | `Ctrl+R` / `Ctrl+Shift+R` a quarter turn, `Ctrl+H` / `Ctrl+J` flip; annotations turn with the image, undoable |
-| Reset image | `Ctrl+0`: zoom, opacity, rotation and flips back to normal |
+| Thumbnail | `Ctrl+M` or `Shift` + double-click collapses the pin into a 75 px tile at its corner; a click restores it. With the crop tool's marquee drawn, `Shift+Enter` keeps only that part visible as the tile |
+| Reset image | `Ctrl+0`: zoom, opacity, rotation, flips and thumbnail back to normal |
 | Copy image and close | `Ctrl+C`, double-click or right-click |
 | Save to the screenshot folder and close | `Ctrl+S` or the middle-click menu |
 | Close without copying | `Esc`; `snip-pin.sh reopen` brings the last closed pin back where it was, with zoom, opacity and annotations. `Shift+Esc` destroys it for good |
@@ -229,6 +230,7 @@ effective settings and where each comes from.
 | `smooth` | `1` | bilinear scaling; `0` shows crisp pixel blocks when zoomed in (also a menu toggle) |
 | `opacity` | `100` | starting opacity of a pin in percent; `Ctrl+1` returns to it |
 | `alpha_bg` | `transparent` | behind transparent images (clipboard, files): `transparent`, `checker`, or a colour like `#ffffff` |
+| `thumb_size` | `75` | side of the tile a pin collapses into |
 | `reopen` | `5` | how many closed pins `reopen` can bring back; `0` turns it off |
 | `confirm_close_all` | `1` | `close-all` asks before closing more than one pin; `0` closes at once |
 | `action` | `copy+pin` | what a bare `snip-pin.sh` (and `screen`, `repeat`) does with the capture: `copy`, `save`, `pin`, joined by `+` |

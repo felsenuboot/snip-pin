@@ -313,6 +313,7 @@ PY
         show reopen 5
         show opacity 100
         show alpha_bg transparent
+        show thumb_size 75
         exit 0 ;;
     --version|-V)
         cat "$HERE/VERSION"; exit 0 ;;
