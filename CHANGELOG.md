@@ -31,6 +31,7 @@ layout) may still change.
 - `sound = default` (or a file) plays a sound when a snip is copied or saved, from a pin or from the `copy` / `save` modes (#88).
 - Custom commands: `[commands]` entries (`Open in GIMP = gimp %f`) appear under *Send to* in the menu, the first nine on `Ctrl+Shift+1` … `9`, and run detached with the exported image; *Open with…* asks the desktop which application to use (#86).
 - Palette: `palette` sets up to nine swatches (keys `1`–`9`), `widths` two to five stroke widths, `Ctrl`+click on a swatch opens a colour chooser for the session, and every tool remembers the colour and width it was last used with (`tool_colors = 0` turns that off) (#79).
+- Eraser tool (`X`): click an annotation to remove it. With no tool active a click selects an annotation, a drag moves it, `Delete` removes it, a swatch or width restyles it; every step is undoable and numbered steps renumber (#80).
 
 ## [0.3.0] – 2026-09-06
 

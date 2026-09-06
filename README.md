@@ -35,7 +35,8 @@ GTK 4 viewer; no daemon, no portal.
   frozen frame, about 40 ms.
 - ✏️ **Annotate on the pin.** Rectangle, ellipse, arrow, pen, text (input
   methods and Compose work), numbered steps, marker, blur, crop, rotate and
-  flip, with undo and redo. Annotations are baked into what you copy or save; the file on
+  flip, with undo and redo; an eraser, and every annotation can be moved,
+  recoloured or removed afterwards. Annotations are baked into what you copy or save; the file on
   disk stays untouched.
 - 📋 **Clipboard first.** Every snip lands in the clipboard as well; `Ctrl+C`,
   a double-click or a right-click on a pin copies it again, annotations
@@ -165,6 +166,11 @@ draw with the left mouse button; with no tool selected the pin moves as usual.
 | Marker | `M` | wide, semi-transparent highlighter |
 | Blur | `B` | pixelates a rectangle, for hiding secrets |
 | Crop | `C` | drag the part to keep, `Enter` applies, `Esc` cancels; undoable, the window shrinks in place |
+| Eraser | `X` | click an annotation to remove it (undoable; numbered steps renumber) |
+
+With no tool selected, a click on an annotation selects it (dashed box): drag
+moves it, `Delete` removes it, a swatch or a width button restyles it, `Esc`
+deselects. All of that is undoable.
 
 Colour: `1`–`9` or the swatches; `Ctrl`+click a swatch to replace it with
 any colour for the session. Stroke width: `[` / `]` or the dots (also sets

@@ -75,6 +75,8 @@ thumb_size = 75               # side of the tile a pin collapses into (Ctrl+M, S
 #tool_marker = m
 #tool_blur = b
 #tool_crop = c
+#tool_eraser = x
+#delete = Delete              # remove the selected annotation
 #color_1 = 1                  # ... color_7 = 7
 
 [mouse]
