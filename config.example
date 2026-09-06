@@ -36,6 +36,10 @@ sel_width = 1
 sel_mask = #00000080
 sel_fill = #00000000
 sel_size = 1                  # 0 hides the WxH readout while dragging
+selector = auto               # auto: the overlay when gtk4-layer-shell is installed, else slurp; or overlay / slurp
+sel_hints = 1                 # overlay: the key-hints panel
+sel_magnify = 9               # overlay: magnifier factor
+sel_adjust = 0                # overlay: 1 = a drag leaves an adjustable selection (anchors), Enter or a double-click confirms
 cursor = 0                    # 1 includes the mouse cursor in the capture
 areas = 8                     # capture areas remembered for `snip-pin.sh repeat [N]`
 action = copy+pin             # what a bare `snip-pin.sh` does after the capture: copy, save, pin, joined by +

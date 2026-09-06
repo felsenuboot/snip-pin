@@ -32,8 +32,11 @@ GTK 4 viewer; no daemon, no portal.
   underneath.
 - 🎯 **Snaps to windows and elements.** Windows and the rectangles inside them
   (images, cards, panels, table cells) highlight under the pointer; a click
-  snaps to one, a drag selects freely. Element detection is pure numpy on the
-  frozen frame, about 40 ms.
+  snaps to one, a drag selects freely, anchors adjust it. Element detection is
+  pure numpy on the frozen frame, about 40 ms.
+- 🔍 **Magnifier and colour picker.** A loupe with the pixel grid, the
+  coordinate and the colour under the pointer; `C` copies the colour. The keys
+  are listed on screen while you select.
 - ✏️ **Annotate on the pin.** Rectangle, ellipse, arrow, pen, text (input
   methods and Compose work), numbered steps, marker, blur, crop, rotate and
   flip, with undo and redo; an eraser, and every annotation can be moved,
@@ -65,15 +68,16 @@ GNOME and macOS are not, see [docs/decisions.md](docs/decisions.md).
 ## Install
 
 Python 3.11+, PyGObject, GTK 4, `grim`, `slurp`, `wl-clipboard` and `jq`.
-`hyprpicker` (freezes the screen during selection), `python-numpy` (element
-snapping), `libnotify` (toasts), `tesseract` with a language pack (*Copy
-text*) and `gettext` (translations; German is included) are optional.
+`gtk4-layer-shell` (the selection overlay; without it `slurp` selects on a
+screen frozen by `hyprpicker`), `python-numpy` (element snapping), `libnotify`
+(toasts), `tesseract` with a language pack (*Copy text*) and `gettext`
+(translations; German is included) are optional.
 
 | Distribution | Packages |
 | --- | --- |
-| Arch | `grim slurp wl-clipboard jq python-gobject gtk4 hyprpicker python-numpy libnotify` |
-| Fedora | `grim slurp wl-clipboard jq python3-gobject gtk4 hyprpicker python3-numpy libnotify` |
-| Debian, Ubuntu | `grim slurp wl-clipboard jq python3-gi python3-gi-cairo gir1.2-gtk-4.0 python3-numpy libnotify-bin` (no hyprpicker package) |
+| Arch | `grim slurp wl-clipboard jq python-gobject gtk4 gtk4-layer-shell hyprpicker python-numpy libnotify` |
+| Fedora | `grim slurp wl-clipboard jq python3-gobject gtk4 gtk4-layer-shell hyprpicker python3-numpy libnotify` |
+| Debian, Ubuntu | `grim slurp wl-clipboard jq python3-gi python3-gi-cairo gir1.2-gtk-4.0 gir1.2-gtk4layershell-1.0 python3-numpy libnotify-bin` (no hyprpicker package) |
 
 ```
 git clone https://github.com/felsenuboot/snip-pin ~/.local/share/snip-pin
@@ -135,6 +139,25 @@ the viewer tries the Lua form first and remembers which one the compositor
 accepted.
 
 </details>
+
+## Selecting
+
+With `gtk4-layer-shell` installed, the selection is snip-pin's own overlay
+over the frozen screen (otherwise `slurp`, which snaps to windows and elements
+but knows no keys). Windows and elements highlight under the pointer, a
+magnifier shows the pixels, the coordinate and the colour, and a panel lists
+the keys:
+
+| Action | Input |
+|---|---|
+| Select | drag, or click the highlighted window / element |
+| Confirm / abort | `Enter`, a double-click or the middle button / `Esc`, right-click |
+| Adjust | drag an anchor or the inside of a selection; arrows move it by 1 px (`Shift` 10, `Ctrl` resizes). With `sel_adjust = 1` every drag waits for `Enter` |
+| Detection | `Tab` cycles both / windows / elements / off; `1` / `2` or the wheel pick the parent or child element |
+| Whole screen | `Ctrl+A` selects the monitor under the pointer, again every monitor |
+| Previous areas | `R` / `Shift+R` step through the last capture areas |
+| Colour | `C` copies the colour under the pointer, `Shift` switches HEX / RGB |
+| Pointer | `W A S D` move it by one pixel; `F5` refreshes the frozen frame |
 
 ## Using a pin
 
@@ -253,6 +276,10 @@ effective settings and where each comes from.
 | `sel_mask` | `#00000080` | dim over the rest of the screen while selecting |
 | `sel_fill` | `#00000000` | fill inside the selection |
 | `sel_size` | `1` | show the selection's size while dragging; `0` hides it |
+| `selector` | `auto` | the selection UI: the overlay when `gtk4-layer-shell` is installed, otherwise `slurp`; force with `overlay` or `slurp` |
+| `sel_hints` | `1` | the overlay's key-hints panel |
+| `sel_magnify` | `9` | the overlay's magnifier factor |
+| `sel_adjust` | `0` | `1`: a drag leaves an adjustable selection with anchors; `Enter` or a double-click confirms |
 | `cursor` | `0` | `1` includes the mouse cursor in the capture |
 | `areas` | `8` | capture areas remembered for `repeat` |
 | `default_tool` | `none` | tool active as soon as a pin opens: `rect`, `ellipse`, `arrow`, `pen`, `text`, `counter`, `marker`, `blur` |
@@ -286,9 +313,10 @@ value unbinds. Colours stay on the digits.
 
 ## Development
 
-- **Four files.** `snip-pin.sh` freezes the screen, feeds `slurp` with window
-  and element rectangles, captures with `grim`, copies with `wl-copy` and
-  launches the viewer. `snip-elements.py` finds the elements (long horizontal
+- **Five files.** `snip-pin.sh` grabs the frame, collects window and element
+  rectangles, runs the selection (`snip-select.py`, a layer-shell overlay that
+  draws the frozen frame, the magnifier and the anchors; or `slurp` on a
+  frozen screen), captures with `grim`, copies and launches the viewer. `snip-elements.py` finds the elements (long horizontal
   and vertical luminance edges joined into rectangles, the way Snipaste does)
   in pure numpy, about 40 ms on a 3440×1440 frame while the screen is frozen.
   `pin-view.py` is the viewer and annotation editor. `pin-history.py` is the
