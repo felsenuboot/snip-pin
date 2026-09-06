@@ -36,6 +36,7 @@ layout) may still change.
 - `Ctrl+Shift+C` copies the text in a pin, recognised by tesseract (`ocr_lang`, or any engine via `ocr_cmd`); with a crop marquee drawn only that part is read. Small captures are upscaled first; the result is toasted and the pin stays (#84).
 - `debug = 1` logs subcommands, geometry, captures, hand-overs, placement replies, copies, saves, warnings and uncaught exceptions with timestamps to `~/.local/state/snip-pin/log` (rotated at 1 MB); `snip-pin.sh log [-f]` shows it and `doctor` names it (#89).
 - Pin groups: `snip-pin.sh group next|prev|N` shows another group of pins and hides the current one; new pins join the current group, *Move to group* in the menu moves a pin, `toggle` acts on the current group (#70).
+- Translations: the viewer's and the picker's strings go through gettext; a German translation ships in `po/de.po` and `install.sh` compiles it into `~/.local/share/locale` (#90).
 
 ## [0.3.0] – 2026-09-06
 

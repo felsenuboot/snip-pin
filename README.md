@@ -66,8 +66,8 @@ GNOME and macOS are not, see [docs/decisions.md](docs/decisions.md).
 
 Python 3.11+, PyGObject, GTK 4, `grim`, `slurp`, `wl-clipboard` and `jq`.
 `hyprpicker` (freezes the screen during selection), `python-numpy` (element
-snapping), `libnotify` (toasts) and `tesseract` with a language pack (*Copy
-text*) are optional.
+snapping), `libnotify` (toasts), `tesseract` with a language pack (*Copy
+text*) and `gettext` (translations; German is included) are optional.
 
 | Distribution | Packages |
 | --- | --- |
@@ -313,6 +313,11 @@ value unbinds. Colours stay on the digits.
   that region directly; `SNIP_NO_ELEMENTS=1` snaps to windows only;
   `grim -s 1 -t ppm - | ./snip-elements.py --debug out.png` draws the detected
   edges and rectangles onto a copy of the screen.
+- **Translations.** The UI strings go through gettext; `po/snip-pin.pot` is
+  the template (`xgettext --language=Python --keyword=_ -o po/snip-pin.pot
+  pin-view.py pin-history.py` refreshes it), `po/de.po` the German
+  translation. `install.sh` compiles every `po/*.po` into
+  `~/.local/share/locale`, and `LANG` picks the language.
 - **Tests.** `python -m pytest` (needs `python-pytest`) covers everything that
   runs without a display: the element detector on synthetic frames, the
   annotation renderer, the cache listing and the script's subcommands. CI runs

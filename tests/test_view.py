@@ -720,3 +720,24 @@ def test_next_group_cycles_existing_groups(view):
     assert view.next_group(2, [1, 3], 1) == 3                    # the current group counts even when empty
     assert view.next_group(1, [], 1) == 1 and view.next_group(1, [1], -1) == 1
     assert "--group" in view.COMMANDS
+
+
+def test_translation_files_are_complete_and_valid():
+    import re
+    import shutil
+    import subprocess
+    from conftest import ROOT
+    pot = open(os.path.join(ROOT, "po", "snip-pin.pot"), encoding="utf-8").read()
+    de = open(os.path.join(ROOT, "po", "de.po"), encoding="utf-8").read()
+    pot_ids = set(re.findall(r'^msgid (".*")$', pot, re.M)) - {'""'}
+    de_ids = set(re.findall(r'^msgid (".*")$', de, re.M)) - {'""'}
+    assert pot_ids <= de_ids, pot_ids - de_ids
+    assert 'msgstr ""\n\nmsgid' not in de.replace("\r", "")             # every entry translated
+    if shutil.which("msgfmt"):
+        po = os.path.join(ROOT, "po", "de.po")
+        assert subprocess.run(["msgfmt", "--check", "-o", "/dev/null", po]).returncode == 0
+    # the source strings still exist in the code
+    code = open(os.path.join(ROOT, "pin-view.py"), encoding="utf-8").read() + open(os.path.join(ROOT, "pin-history.py"),
+                                                                                  encoding="utf-8").read()
+    for msgid in list(pot_ids)[:10]:
+        assert msgid[1:-1].split("\\")[0][:20] in code

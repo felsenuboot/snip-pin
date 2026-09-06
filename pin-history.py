@@ -32,6 +32,18 @@ gi.require_version("Gdk", "4.0")
 gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk
 
+import gettext
+
+_translation = gettext.NullTranslations()
+for _d in (os.path.join(os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share"), "locale"),
+           "/usr/share/locale", os.path.join(os.path.dirname(os.path.abspath(__file__)), "locale")):
+    try:
+        _translation = gettext.translation("snip-pin", localedir=_d)
+        break
+    except OSError:
+        continue
+_ = _translation.gettext
+
 APP_ID = "snip-pin"          # same class as pins: the float rule applies
 NOTIFY_SEND = shutil.which("notify-send")           # libnotify is optional
 THUMB_W, THUMB_H = 220, 140
@@ -83,7 +95,7 @@ def load_thumb(cache, path):
         pass                                   # no thumb yet, or a stale/odd one: rebuild
     try:
         pb = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, THUMB_W, THUMB_H, True)
-        _, w, h = GdkPixbuf.Pixbuf.get_file_info(path)
+        _fmt, w, h = GdkPixbuf.Pixbuf.get_file_info(path)
     except (GLib.Error, TypeError):
         return None
     try:
@@ -115,7 +127,7 @@ def label_text(when, size, kept, now=None):
 
 class History(Gtk.ApplicationWindow):
     def __init__(self, app, cache, snip_pin):
-        super().__init__(application=app, title="Snip history")
+        super().__init__(application=app, title=_("Snip history"))
         self.cache, self.snip_pin = cache, snip_pin
         self.add_css_class("snip-history")
         self.set_default_size(COLUMNS * (THUMB_W + 28) + 24, 620)
@@ -128,15 +140,15 @@ class History(Gtk.ApplicationWindow):
         self.flow.set_valign(Gtk.Align.START)
         self.flow.connect("child-activated", self.on_activate)
 
-        self.empty = Gtk.Label(label="No snips in the last days.", vexpand=True)
+        self.empty = Gtk.Label(label=_("No snips in the last days."), vexpand=True)
         scroller = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER, vexpand=True)
         scroller.set_child(self.flow)
         bar = Gtk.ActionBar()
-        hint = Gtk.Label(label="double-click / Enter pin  ·  right-click copy  ·  F keep  ·  Del remove"
-                               "  ·  arrows / WASD / HJKL move")
+        hint = Gtk.Label(label=_("double-click / Enter pin  ·  right-click copy  ·  F keep  ·  Del remove"
+                                 "  ·  arrows / WASD / HJKL move"))
         hint.add_css_class("snip-hint")
         bar.pack_start(hint)
-        clear = Gtk.Button(label="Clear history", can_focus=False)   # keys belong to the grid
+        clear = Gtk.Button(label=_("Clear history"), can_focus=False)   # keys belong to the grid
         clear.connect("clicked", self.clear_all)
         bar.pack_end(clear)
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -212,10 +224,10 @@ class History(Gtk.ApplicationWindow):
         child.path = dst
         self.relabel(child)
 
-    def clear_all(self, *_):
-        dialog = Gtk.AlertDialog(message="Clear the history?",
-                                 detail="Every snip that is not kept (★) is deleted.",
-                                 buttons=["Cancel", "Clear"], cancel_button=0, default_button=1)
+    def clear_all(self, *_args):
+        dialog = Gtk.AlertDialog(message=_("Clear the history?"),
+                                 detail=_("Every snip that is not kept (★) is deleted."),
+                                 buttons=[_("Cancel"), _("Clear")], cancel_button=0, default_button=1)
 
         def done(d, result):
             try:
@@ -250,8 +262,8 @@ class History(Gtk.ApplicationWindow):
             subprocess.Popen(["wl-copy", "-t", "image/png"], stdin=f,
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         if NOTIFY_SEND:
-            subprocess.Popen([NOTIFY_SEND, "-i", "camera-photo-symbolic", "-t", "1500", "Snip", "Copied to clipboard"],
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen([NOTIFY_SEND, "-i", "camera-photo-symbolic", "-t", "1500", "Snip",
+                              _("Copied to clipboard")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         self.close()
 
     def on_rclick(self, gesture, n, x, y):

@@ -154,7 +154,7 @@ def render_text_png(text, out_path, font="Sans 11", max_width=900, margin=15, fg
     layout.set_width(max(50, int(max_width)) * Pango.SCALE)
     layout.set_wrap(Pango.WrapMode.WORD_CHAR)
     layout.set_text(text, -1)
-    _, logical = layout.get_pixel_extents()
+    _ink, logical = layout.get_pixel_extents()
     w, h = logical.width + 2 * margin, logical.height + 2 * margin
     surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, max(1, w), max(1, h))
     cr = cairo.Context(surf)
@@ -205,6 +205,22 @@ gi.require_version("GdkPixbuf", "2.0")
 gi.require_version("Pango", "1.0")
 gi.require_version("PangoCairo", "1.0")
 from gi.repository import Gdk, GdkPixbuf, Gio, GLib, GObject, Gtk, Pango, PangoCairo
+
+# ---- translations -----------------------------------------------------------
+# po/*.po hold the UI strings; install.sh compiles them into
+# ~/.local/share/locale, LANG / LANGUAGE pick the language as usual.
+import gettext
+
+LOCALE_DIRS = [os.path.join(os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share"), "locale"),
+               "/usr/share/locale", os.path.join(os.path.dirname(os.path.abspath(__file__)), "locale")]
+_translation = gettext.NullTranslations()
+for _d in LOCALE_DIRS:
+    try:
+        _translation = gettext.translation("snip-pin", localedir=_d)
+        break
+    except OSError:
+        continue
+_ = _translation.gettext
 
 APP_ID = "snip-pin"
 ZOOM_STEP = 1.10
@@ -331,7 +347,7 @@ def default_tool():
     name = CFG.get("default_tool", "none").strip().lower()
     if name in ("", "none"):
         return None
-    if name in {t for t, _, _, _ in TOOLS}:
+    if name in {t for t, _k, _l, _t in TOOLS}:
         return name
     if name not in _warned:
         _warned.add(name)
@@ -447,12 +463,12 @@ def load_widths(setting):
 def size_for(table, width, base, factor):
     """A per-width size: the tuned default when the width is a default one, else a rule of thumb."""
     return table.get(width) or max(4, round(base + factor * width))
-TOOLS = [("rect", "R", "Rect", "Rectangle outline"), ("ellipse", "E", "Ellipse", "Ellipse outline"),
-         ("arrow", "A", "Arrow", "Arrow"), ("pen", "P", "Pen", "Freehand pen"),
-         ("text", "T", "Text", "Text: click, type, Enter"), ("counter", "N", "1 2 3", "Numbered step: click"),
-         ("marker", "M", "Mark", "Highlighter"), ("blur", "B", "Blur", "Mosaic (hide secrets)"),
-         ("crop", "C", "Crop", "Crop: drag, Enter applies, Esc cancels"),
-         ("eraser", "X", "Erase", "Eraser: click an annotation to remove it")]
+TOOLS = [("rect", "R", _("Rect"), _("Rectangle outline")), ("ellipse", "E", _("Ellipse"), _("Ellipse outline")),
+         ("arrow", "A", _("Arrow"), _("Arrow")), ("pen", "P", _("Pen"), _("Freehand pen")),
+         ("text", "T", _("Text"), _("Text: click, type, Enter")), ("counter", "N", "1 2 3", _("Numbered step: click")),
+         ("marker", "M", _("Mark"), _("Highlighter")), ("blur", "B", _("Blur"), _("Mosaic (hide secrets)")),
+         ("crop", "C", _("Crop"), _("Crop: drag, Enter applies, Esc cancels")),
+         ("eraser", "X", _("Erase"), _("Eraser: click an annotation to remove it"))]
 CLICK_TOOLS = ("text", "counter", "eraser")        # placed with a click, not a drag
 MARKER_ALPHA = 0.4
 MARKER_FACTOR = 3.5                                # marker stroke = width * factor
@@ -502,8 +518,8 @@ def recall_tool(memory, tool, colors, widths):
     if not entry:
         return None, None
     color_hex, width_px = entry
-    ci = next((i for i, (_, h) in enumerate(colors) if h == color_hex), None)
-    wi = next((i for i, (_, px) in enumerate(widths) if px == width_px), None)
+    ci = next((i for i, (_n, h) in enumerate(colors) if h == color_hex), None)
+    wi = next((i for i, (_n, px) in enumerate(widths) if px == width_px), None)
     return ci, wi
 
 
@@ -1249,7 +1265,7 @@ def draw_op(cr, pixbuf, op, caret=False):
         layout = PangoCairo.create_layout(cr)
         layout.set_font_description(Pango.FontDescription.from_string(f"Sans Bold {int(rad * 1.2)}px"))
         layout.set_text(str(op.get("n", 1)), -1)
-        _, logical = layout.get_pixel_extents()
+        _ink, logical = layout.get_pixel_extents()
         dark = (0.299 * r + 0.587 * g + 0.114 * b) < 0.5
         cr.set_source_rgb(1, 1, 1) if dark else cr.set_source_rgb(0, 0, 0)
         cr.move_to(x - logical.width / 2 - logical.x, y - logical.height / 2 - logical.y)
@@ -1308,7 +1324,7 @@ def draw_op(cr, pixbuf, op, caret=False):
         cr.set_source_rgb(r, g, b)
         cr.fill()
         if caret:
-            _, logical = layout.get_pixel_extents()
+            _ink, logical = layout.get_pixel_extents()
             cx = x + logical.width + 2
             cr.set_source_rgb(r, g, b)
             cr.set_line_width(max(1.5, size / 12))
@@ -1538,7 +1554,7 @@ class Pin(Gtk.ApplicationWindow):
     def apply_scale(self):
         # both sides from the same scale: clamping each side on its own
         # stretched thin snips (a line of text at 800x18 became 800x40)
-        _, _, vw, vh = self.view()
+        vx0, vy0, vw, vh = self.view()
         w = max(1, round(vw * self.scale))
         h = max(1, round(vh * self.scale))
         self.area.set_content_width(w)
@@ -1661,7 +1677,7 @@ class Pin(Gtk.ApplicationWindow):
         layout = PangoCairo.create_layout(cr)
         layout.set_font_description(Pango.FontDescription.from_string("Sans Bold 11px"))
         layout.set_text(self.osd[0], -1)
-        _, logical = layout.get_pixel_extents()
+        _ink, logical = layout.get_pixel_extents()
         pad, x, y = 5, 6, 6
         cr.set_source_rgba(0, 0, 0, 0.6)
         cr.rectangle(x, y, logical.width + 2 * pad, logical.height + 2 * pad)
@@ -1694,7 +1710,7 @@ class Pin(Gtk.ApplicationWindow):
                 self.toolbar_shown = False
                 self.toolbar.popdown()
             self.thumb = {"scale": self.scale, "region": region}
-            _, _, vw, vh = self.view()
+            vx0, vy0, vw, vh = self.view()
             self.scale = thumb_scale(vw, vh, thumb_size())
         elif not on and self.thumb is not None:
             self.scale = max(self.min_scale(), self.thumb["scale"])
@@ -1710,7 +1726,7 @@ class Pin(Gtk.ApplicationWindow):
         self.group = n
         if n != CURRENT_GROUP[0]:
             hide_pin(self)
-            notify(f"Moved to group {n}")
+            notify(_("Moved to group {n}").format(n=n))
 
     def toggle_thumbnail(self):
         if self.thumb is not None:
@@ -1768,7 +1784,7 @@ class Pin(Gtk.ApplicationWindow):
         else:
             self.remove_css_class("ghost")
         self.apply_input_region()
-        self.show_osd("click-through" if on else "solid")
+        self.show_osd(_("click-through") if on else _("solid"))
 
     def apply_input_region(self):
         """GTK recomputes the input region on every layout; draw() runs after
@@ -2030,7 +2046,7 @@ class Pin(Gtk.ApplicationWindow):
         self.set_scale(self.base_scale)
         self.opacity = default_opacity()
         self.set_opacity(self.opacity)
-        self.show_osd("reset")
+        self.show_osd(_("reset"))
 
     def set_pixbuf(self, pixbuf, dx, dy):
         """Swap the image for a crop (or its undo): ops move by (-dx, -dy), the
@@ -2126,11 +2142,11 @@ class Pin(Gtk.ApplicationWindow):
         box.append(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL))
 
         self.swatches = []
-        for i, (name, _) in enumerate(COLORS):
+        for i, (name, _hex) in enumerate(COLORS):
             b = add(Gtk.Button())
             b.add_css_class("swatch")
             b.add_css_class(f"c{i}")
-            b.set_tooltip_text(f"{name}  [{i + 1}]  (Ctrl+click: choose a colour)")
+            b.set_tooltip_text(f"{name}  [{i + 1}]  " + _("(Ctrl+click: choose a colour)"))
             b.connect("clicked", lambda _b, i=i: self.on_swatch(i))
             self.swatches.append(b)
         box.append(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL))
@@ -2145,10 +2161,10 @@ class Pin(Gtk.ApplicationWindow):
         box.append(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL))
 
         self.undo_btn = add(Gtk.Button(icon_name="edit-undo-symbolic"))
-        self.undo_btn.set_tooltip_text("Undo  [Ctrl+Z]")
+        self.undo_btn.set_tooltip_text(_("Undo") + "  [Ctrl+Z]")
         self.undo_btn.connect("clicked", lambda *a: self.undo())
         self.redo_btn = add(Gtk.Button(icon_name="edit-redo-symbolic"))
-        self.redo_btn.set_tooltip_text("Redo  [Ctrl+Shift+Z]")
+        self.redo_btn.set_tooltip_text(_("Redo") + "  [Ctrl+Shift+Z]")
         self.redo_btn.connect("clicked", lambda *a: self.redo())
         return pop
 
@@ -2484,41 +2500,42 @@ class Pin(Gtk.ApplicationWindow):
     # ---- actions ----------------------------------------------------------
     def build_menu(self):
         m = Gio.Menu()
-        m.append(f"Copy image & close\t{key_label('copy')}", "win.copy")
-        m.append(f"Save to screenshots & close\t{key_label('save')}", "win.save")
-        m.append(f"Save as…\t{key_label('save_as')}", "win.save_as")
-        m.append(f"Copy text (OCR)\t{key_label('ocr')}", "win.ocr")
-        m.append(f"Print…\t{key_label('print')}", "win.print")
-        m.append(f"Open with…\t{key_label('open_with')}", "win.open_with")
+        m.append(_("Copy image & close") + f"\t{key_label('copy')}", "win.copy")
+        m.append(_("Save to screenshots & close") + f"\t{key_label('save')}", "win.save")
+        m.append(_("Save as…") + f"\t{key_label('save_as')}", "win.save_as")
+        m.append(_("Copy text (OCR)") + f"\t{key_label('ocr')}", "win.ocr")
+        m.append(_("Print…") + f"\t{key_label('print')}", "win.print")
+        m.append(_("Open with…") + f"\t{key_label('open_with')}", "win.open_with")
         cmds = commands()
         if cmds:
             send = Gio.Menu()
-            for i, (name, _) in enumerate(cmds[:9]):
+            for i, (name, _cmd) in enumerate(cmds[:9]):
                 send.append(f"{name}\t{key_label(f'command_{i + 1}')}", f"win.command_{i + 1}")
-            m.append_submenu("Send to", send)               # beyond nine: no key, no menu entry
+            m.append_submenu(_("Send to"), send)               # beyond nine: no key, no menu entry
         edit = Gio.Menu()
-        edit.append(f"Undo\t{key_label('undo')}", "win.undo")
-        edit.append(f"Redo\t{key_label('redo')}", "win.redo")
+        edit.append(_("Undo") + f"\t{key_label('undo')}", "win.undo")
+        edit.append(_("Redo") + f"\t{key_label('redo')}", "win.redo")
         m.append_section(None, edit)
         tr = Gio.Menu()
-        tr.append(f"Rotate right\t{key_label('rotate_cw')}", "win.rotate_cw")
-        tr.append(f"Rotate left\t{key_label('rotate_ccw')}", "win.rotate_ccw")
-        tr.append(f"Flip horizontally\t{key_label('flip_h')}", "win.flip_h")
-        tr.append(f"Flip vertically\t{key_label('flip_v')}", "win.flip_v")
+        tr.append(_("Rotate right") + f"\t{key_label('rotate_cw')}", "win.rotate_cw")
+        tr.append(_("Rotate left") + f"\t{key_label('rotate_ccw')}", "win.rotate_ccw")
+        tr.append(_("Flip horizontally") + f"\t{key_label('flip_h')}", "win.flip_h")
+        tr.append(_("Flip vertically") + f"\t{key_label('flip_v')}", "win.flip_v")
         m.append_section(None, tr)
         tail = Gio.Menu()
-        tail.append(f"Thumbnail\t{key_label('thumbnail')}", "win.thumbnail")
+        tail.append(_("Thumbnail") + f"\t{key_label('thumbnail')}", "win.thumbnail")
         groups = Gio.Menu()
         for n in range(1, 6):
-            item = Gio.MenuItem.new(f"Group {n}" + ("  (current)" if n == CURRENT_GROUP[0] else ""), None)
+            label = _("Group {n}").format(n=n) + ("  " + _("(current)") if n == CURRENT_GROUP[0] else "")
+            item = Gio.MenuItem.new(label, None)
             item.set_action_and_target_value("win.group", GLib.Variant.new_int32(n))
             groups.append_item(item)
-        tail.append_submenu("Move to group", groups)
-        tail.append("Smooth scaling", "win.smooth")
-        tail.append(f"Reset image\t{key_label('reset')}", "win.reset")
-        tail.append(f"Click-through\t{key_label('click_through')}", "win.click_through")
-        tail.append(f"Close (snip-pin.sh reopen brings it back)\t{key_label('cancel')}", "win.close")
-        tail.append(f"Destroy\t{key_label('destroy')}", "win.destroy")
+        tail.append_submenu(_("Move to group"), groups)
+        tail.append(_("Smooth scaling"), "win.smooth")
+        tail.append(_("Reset image") + f"\t{key_label('reset')}", "win.reset")
+        tail.append(_("Click-through") + f"\t{key_label('click_through')}", "win.click_through")
+        tail.append(_("Close (snip-pin.sh reopen brings it back)") + f"\t{key_label('cancel')}", "win.close")
+        tail.append(_("Destroy") + f"\t{key_label('destroy')}", "win.destroy")
         m.append_section(None, tail)
         return m
 
@@ -2554,7 +2571,7 @@ class Pin(Gtk.ApplicationWindow):
         finally:
             if temporary:
                 os.unlink(path)
-        notify("Copied to clipboard")
+        notify(_("Copied to clipboard"))
         log(f"copied {self.path} ({len(self.ops)} ops)")
         play_sound()
         self.close()
@@ -2577,10 +2594,10 @@ class Pin(Gtk.ApplicationWindow):
         except (OSError, GLib.Error) as e:
             # unwritable folder, full disk, missing encoder: keep the pin so nothing is lost
             msg = getattr(e, "strerror", None) or getattr(e, "message", None) or str(e)
-            notify(f"Cannot save to {folder}: {msg}", 3000)
+            notify(_("Cannot save to {folder}: {msg}").format(folder=folder, msg=msg), 3000)
             warn(f"cannot save to {folder}: {e}")
             return
-        notify(f"Saved {dest}")
+        notify(_("Saved {dest}").format(dest=dest))
         log(f"saved {dest}")
         play_sound()
         self.close()
@@ -2595,7 +2612,7 @@ class Pin(Gtk.ApplicationWindow):
         try:
             argv = command_argv(spec, path, self.path)
         except ValueError as e:
-            notify(f"{name}: bad command line ({e})", 3000)
+            notify(_("{name}: bad command line ({e})").format(name=name, e=e), 3000)
             if temporary:
                 os.unlink(path)
             return
@@ -2603,7 +2620,7 @@ class Pin(Gtk.ApplicationWindow):
             return
         cleanup = (lambda: os.path.exists(path) and os.unlink(path)) if temporary else None
         run_detached(argv, cleanup, name)
-        notify(f"Sent to {name}")
+        notify(_("Sent to {name}").format(name=name))
 
     def open_with(self, *a):
         """The desktop's application chooser for the exported image (portal / GTK)."""
@@ -2622,14 +2639,14 @@ class Pin(Gtk.ApplicationWindow):
                 fl.launch_finish(result)
             except GLib.Error as e:
                 if "cancel" not in e.message.lower():
-                    notify(f"Cannot open: {e.message}", 3000)
+                    notify(_("Cannot open: {msg}").format(msg=e.message), 3000)
         launcher.launch(self, None, done)
 
     def ocr(self, *a):
         """Recognise the text in the pin (or in the crop marquee) and copy it; the pin stays."""
         argv_probe = ocr_argv(CFG.get("ocr_cmd", ""), CFG.get("ocr_lang", "eng"), "x")
         if argv_probe is None:
-            notify("No OCR engine: install tesseract (and a language pack)", 4000)
+            notify(_("No OCR engine: install tesseract (and a language pack)"), 4000)
             return
         region = self.crop_pending or (0, 0, self.iw, self.ih)
         x0, y0, w, h = region
@@ -2641,7 +2658,7 @@ class Pin(Gtk.ApplicationWindow):
         os.close(fd)
         pb.savev(tmp, "png", [], [])
         argv = ocr_argv(CFG.get("ocr_cmd", ""), CFG.get("ocr_lang", "eng"), tmp)
-        self.show_osd("recognising…")
+        self.show_osd(_("recognising…"))
         app = self.get_application()
 
         def work():
@@ -2660,14 +2677,15 @@ class Pin(Gtk.ApplicationWindow):
 
         def finish(text, err, rc):
             if rc != 0 or not text:
-                notify(f"No text recognised{': ' + err[-1] if err and rc != 0 else ''}", 4000)
+                notify(_("No text recognised") + (": " + err[-1] if err and rc != 0 else ""), 4000)
                 return False
             try:
                 clipboard_owner(app).offer_text(text)
             except GLib.Error:
                 subprocess.run(["wl-copy"], input=text.encode())
             first = text.splitlines()[0]
-            notify(f"Copied {len(text)} characters: {first[:60]}{'…' if len(first) > 60 else ''}", 3000)
+            first = first[:60] + ("…" if len(first) > 60 else "")
+            notify(_("Copied {n} characters: {first}").format(n=len(text), first=first), 3000)
             play_sound()
             return False
         threading.Thread(target=work, daemon=True).start()
@@ -2700,10 +2718,10 @@ class Pin(Gtk.ApplicationWindow):
             else:
                 result = op.run(Gtk.PrintOperationAction.PRINT_DIALOG, self)
         except GLib.Error as e:
-            notify(f"Cannot print: {e.message}", 3000)
+            notify(_("Cannot print: {msg}").format(msg=e.message), 3000)
             return
         if result == Gtk.PrintOperationResult.ERROR:
-            notify("Printing failed", 3000)
+            notify(_("Printing failed"), 3000)
 
     def save_as(self, *a):
         """A file dialog, preset with the folder, the pattern and the last used extension; the pin stays."""
@@ -2729,10 +2747,10 @@ class Pin(Gtk.ApplicationWindow):
                 write_image(self.pixbuf, self.export_ops(), dest, fmt, save_quality())
             except (OSError, GLib.Error) as e:
                 msg = getattr(e, "strerror", None) or getattr(e, "message", None) or str(e)
-                notify(f"Cannot save {os.path.basename(dest)}: {msg}", 3000)
+                notify(_("Cannot save {name}: {msg}").format(name=os.path.basename(dest), msg=msg), 3000)
                 return
             remember_extension(EXTENSIONS[fmt])
-            notify(f"Saved {dest}")
+            notify(_("Saved {dest}").format(dest=dest))
             play_sound()
         dialog.save(self, None, done)
 
@@ -2805,9 +2823,9 @@ def switch_group(app, arg):
     shown = [w for w in wins if w.group == target]
     for w in shown:
         show_pin(w)
-        w.show_osd(f"group {target}" + (f" / {len(set(groups) | {target})}" if groups else ""))
+        w.show_osd(_("group {n}").format(n=target) + (f" / {len(set(groups) | {target})}" if groups else ""))
     if not shown:
-        notify(f"Group {target}: no pins (new pins join it)")
+        notify(_("Group {n}: no pins (new pins join it)").format(n=target))
 
 
 def close_all(app):
@@ -2819,8 +2837,8 @@ def close_all(app):
         for w in wins:
             w.close()
         return
-    dialog = Gtk.AlertDialog(message=f"Close {len(wins)} pins?", buttons=["Cancel", "Close all"],
-                             detail="Annotations that were not copied or saved are lost.",
+    dialog = Gtk.AlertDialog(message=_("Close {n} pins?").format(n=len(wins)), buttons=[_("Cancel"), _("Close all")],
+                             detail=_("Annotations that were not copied or saved are lost."),
                              default_button=1, cancel_button=0)
 
     def done(d, result):
@@ -2870,7 +2888,7 @@ def reopen_pin(app):
         win.present()
         win.place()
         return True
-    notify("No closed pin to reopen")
+    notify(_("No closed pin to reopen"))
     return False
 
 
@@ -2899,7 +2917,7 @@ def open_pin(app, args):
         win = Pin(app, path, pos, output_scale(hypr_json("j/monitors") if pos else None, pos))
     except GLib.Error as e:
         # deleted between 'last' and here, a truncated clipboard image, 'pin FILE' on a non-image
-        notify(f"Cannot open {os.path.basename(path)}", 3000)
+        notify(_("Cannot open {name}").format(name=os.path.basename(path)), 3000)
         warn(f"cannot open {path}: {e.message.splitlines()[0]}")
         if not app.get_windows():
             app.quit()             # nothing to show: a window-less GtkApplication would idle forever
@@ -2955,7 +2973,7 @@ def serve(app):
 
     def on_connect(fd, cond):
         try:
-            conn, _ = srv.accept()
+            conn, _addr = srv.accept()
         except OSError:
             return True
         try:
