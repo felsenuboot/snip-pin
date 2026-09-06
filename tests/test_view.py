@@ -560,3 +560,28 @@ def test_sound_command(view):
     assert view.sound_command("default", "/usr/bin/cgp") == ["/usr/bin/cgp", "-i", "screen-capture"]
     assert view.sound_command("~/x.oga", "/usr/bin/cgp") == ["/usr/bin/cgp", "-f", os.path.expanduser("~/x.oga")]
     assert view.sound_command("default", None) is None                  # GTK's player takes over
+
+
+def test_command_argv_substitution(view):
+    assert view.command_argv("gimp %f", "/tmp/a.png", "/c/o.png") == ["gimp", "/tmp/a.png"]
+    argv = view.command_argv("sh -c 'cp %f %F.bak'", "/tmp/a b.png", "/c/o.png")
+    assert argv == ["sh", "-c", "cp /tmp/a b.png /c/o.png.bak"]
+    assert view.command_argv("printf %%s %f", "x", "y") == ["printf", "%s", "x"]
+    assert view.command_argv("", "x", "y") == []
+
+
+def test_commands_keep_their_names_and_order(view):
+    cfg = view.parse_config("[commands]\nOpen in GIMP = gimp %f\nUpload = up.sh %f\nempty =\n")
+    assert list(cfg["commands"]) == ["Open in GIMP", "Upload", "empty"]
+    assert view.ACTIONS["command_1"] == "ctrl+shift+1" and view.ACTIONS["command_9"] == "ctrl+shift+9"
+    assert "command_3" in view.MOUSE_ACTIONS and "open_with" in view.MOUSE_ACTIONS
+
+
+def test_prune_dir_removes_old_files_only(tmp_path, view):
+    old, new = tmp_path / "old.png", tmp_path / "new.png"
+    old.write_bytes(b""); new.write_bytes(b"")
+    import time as t
+    os.utime(old, (t.time() - 7200,) * 2)
+    view.prune_dir(str(tmp_path), 3600)
+    assert os.listdir(tmp_path) == ["new.png"]
+    view.prune_dir(str(tmp_path / "missing"))                       # no error

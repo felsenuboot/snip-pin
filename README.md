@@ -145,6 +145,7 @@ accepted.
 | Copy image and close | `Ctrl+C`, double-click or right-click |
 | Save to the screenshot folder and close | `Ctrl+S` or the middle-click menu; name from the `filename` pattern, `format` png, jpg or webp |
 | Save as… | `Ctrl+Shift+S`: a file dialog preset with the folder, the pattern and the last extension you used; `.png`, `.jpg` or `.webp` picks the encoder. The pin stays open |
+| Send to a program | *Open with…* in the menu asks which application; `[commands]` in the config adds your own entries (`Open in GIMP = gimp %f`, an upload script, …) under *Send to*, the first nine on `Ctrl+Shift+1` … `9` |
 | Print | `Ctrl+P`: GTK's print dialog with the image and its annotations scaled to fit the page; print to PDF works too |
 | Close without copying | `Esc`; `snip-pin.sh reopen` brings the last closed pin back where it was, with zoom, opacity and annotations. `Shift+Esc` destroys it for good |
 | Click-through | `Ctrl+T`: the pin ignores the mouse, everything goes to the window below (dashed border). It cannot take the key back, so bind `snip-pin.sh clickthrough`, which toggles every pin. On Hyprland this sets the window's `no_focus` property; elsewhere the pin relies on an empty input region |
@@ -246,6 +247,11 @@ Without `save_dir`, `Ctrl+S` saves to the folder named in
 `~/.config/ml4w/settings/screenshot-folder` if that file exists (ML4W
 dotfiles), otherwise to the XDG pictures directory (`~/Pictures` or its
 localised name).
+
+A `[commands]` section adds programs to the menu under *Send to*: `Open in
+GIMP = gimp %f`, where `%f` is a temporary PNG with the annotations baked in
+and `%F` the original file; the first nine entries get `Ctrl+Shift+1` … `9`.
+A failing command shows its last error line as a toast.
 
 Keys and mouse buttons on a pin are rebindable in the `[keys]` and `[mouse]`
 sections: `copy = ctrl+shift+c`, `redo = ctrl+y`, `right = menu` (Snipaste

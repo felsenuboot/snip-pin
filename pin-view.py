@@ -26,11 +26,13 @@ import json
 import math
 import os
 import re
+import shlex
 import shutil
 import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import warnings
 
@@ -127,8 +129,8 @@ def parse_config(text):
         val = re.split(r"\s#", val, 1)[0].strip()
         if val == "#" or val.startswith("# "):
             val = ""
-        if key and key.replace("_", "a").isalnum():
-            out[section][key.lower()] = val
+        if key and key.replace("_", "a").replace(" ", "a").replace("-", "a").isalnum():
+            out[section][key if section == "commands" else key.lower()] = val
     return out
 
 
@@ -342,11 +344,13 @@ ACTIONS = {
     "width_down": "bracketleft", "width_up": "bracketright", "menu": "F10",
 }
 ACTIONS.update({f"tool_{tool}": key.lower() for tool, key, _, _ in TOOLS})
+ACTIONS.update({f"command_{i}": f"ctrl+shift+{i}" for i in range(1, 10)})
+ACTIONS["open_with"] = ""
 ACTIONS.update({f"color_{i + 1}": str(i + 1) for i in range(len(COLORS))})
 # what the mouse does; [mouse] in the config file overrides ("right = menu")
 MOUSE_DEFAULTS = {"right": "copy", "double": "copy", "shift_double": "thumbnail", "middle": "menu"}
-MOUSE_ACTIONS = ("copy", "save", "save_as", "print", "close", "destroy", "menu", "reset", "reset_zoom",
-                 "thumbnail", "none")
+MOUSE_ACTIONS = ("copy", "save", "save_as", "print", "open_with", "close", "destroy", "menu", "reset", "reset_zoom",
+                 "thumbnail", "none", *[f"command_{i}" for i in range(1, 10)])
 MOD_NAMES = {"ctrl": "CONTROL_MASK", "control": "CONTROL_MASK", "shift": "SHIFT_MASK",
              "alt": "ALT_MASK", "super": "SUPER_MASK", "win": "SUPER_MASK", "meta": "META_MASK"}
 KEY_ALIASES = {"esc": "Escape", "enter": "Return", "del": "Delete", "[": "bracketleft", "]": "bracketright",
@@ -657,6 +661,58 @@ def remember_extension(ext):
         os.makedirs(STATE_DIR, exist_ok=True)
         with open(os.path.join(STATE_DIR, "last-ext"), "w") as f:
             f.write(ext)
+    except OSError:
+        pass
+
+
+# ---- custom commands ---------------------------------------------------------
+# [commands] in the config: `Open in GIMP = gimp %f`. %f is a temporary PNG
+# with the annotations baked in, %F the original file. The first nine get
+# Ctrl+Shift+1 ... 9 and all appear in the menu under "Send to".
+OPEN_DIR = os.path.join(RUNTIME_DIR, "snip-pin", "open")
+
+
+def commands():
+    """[(name, command line)] in config order."""
+    return [(name, cmd) for name, cmd in CFG.section("commands").items() if cmd.strip()]
+
+
+def command_argv(spec, baked, original):
+    """Split a command line and fill in %f (baked PNG) and %F (original); %% is a literal %."""
+    out = []
+    for word in shlex.split(spec):
+        out.append(word.replace("%%", "\0").replace("%f", baked).replace("%F", original).replace("\0", "%"))
+    return out
+
+
+def run_detached(argv, cleanup=None, name=""):
+    """Start argv; when it ends, run cleanup and toast a failure with the last stderr line."""
+    try:
+        proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                                start_new_session=True)
+    except OSError as e:
+        notify(f"{name or argv[0]}: {e.strerror}", 3000)
+        if cleanup:
+            cleanup()
+        return
+
+    def wait():
+        err = proc.stderr.read().decode(errors="replace").strip().splitlines()
+        rc = proc.wait()
+        if cleanup:
+            GLib.idle_add(lambda: cleanup() or False)
+        if rc != 0:
+            GLib.idle_add(lambda: notify(f"{name or argv[0]} failed ({rc}): {err[-1] if err else ''}", 4000) or False)
+    threading.Thread(target=wait, daemon=True).start()
+
+
+def prune_dir(path, max_age=3600):
+    """Remove files older than max_age seconds (leftovers of `Open with` from earlier sessions)."""
+    try:
+        for n in os.listdir(path):
+            f = os.path.join(path, n)
+            if time.time() - os.path.getmtime(f) > max_age:
+                os.unlink(f)
     except OSError:
         pass
 
@@ -1124,8 +1180,9 @@ class Pin(Gtk.ApplicationWindow):
         self.menu = Gtk.PopoverMenu.new_from_model(self.build_menu())
         self.menu.set_parent(self.area)
         self.menu.set_has_arrow(False)
-        for name in ("copy", "save", "save_as", "print", "reset", "close", "destroy", "undo", "redo", "click_through",
-                     "thumbnail", "rotate_cw", "rotate_ccw", "flip_h", "flip_v"):
+        for name in ("copy", "save", "save_as", "print", "open_with", "reset", "close", "destroy", "undo", "redo",
+                     "click_through", "thumbnail", "rotate_cw", "rotate_ccw", "flip_h", "flip_v",
+                     *[f"command_{i}" for i in range(1, 10)]):
             act = Gio.SimpleAction.new(name, None)
             act.connect("activate", lambda *a, name=name: self.run_action(name))
             self.add_action(act)
@@ -1781,6 +1838,10 @@ class Pin(Gtk.ApplicationWindow):
             self.save_as()
         elif action == "print":
             self.print_pin()
+        elif action == "open_with":
+            self.open_with()
+        elif action.startswith("command_"):
+            self.run_custom(int(action[8:]) - 1)
         elif action == "close":
             self.close()
         elif action == "destroy":
@@ -1878,6 +1939,11 @@ class Pin(Gtk.ApplicationWindow):
     def on_key(self, ctrl, keyval, keycode, state):
         mods = int(state) & MOD_MASK
         action = KEYMAP.get((Gdk.keyval_to_lower(keyval), mods))
+        if action is None and mods & int(Gdk.ModifierType.SHIFT_MASK):
+            # Shift+1 arrives as "!" (or whatever the layout puts there): try the key's unshifted symbol
+            found = Gdk.Display.get_default().translate_key(keycode, Gdk.ModifierType(0), 0)
+            if found and found[0]:
+                action = KEYMAP.get((Gdk.keyval_to_lower(found[1]), mods))
         # text entry: the input method first (dead keys, Compose, CJK), then
         # the editing keys; everything else is swallowed while typing
         if self.typing is not None:
@@ -1909,6 +1975,13 @@ class Pin(Gtk.ApplicationWindow):
         m.append(f"Save to screenshots & close\t{key_label('save')}", "win.save")
         m.append(f"Save as…\t{key_label('save_as')}", "win.save_as")
         m.append(f"Print…\t{key_label('print')}", "win.print")
+        m.append(f"Open with…\t{key_label('open_with')}", "win.open_with")
+        cmds = commands()
+        if cmds:
+            send = Gio.Menu()
+            for i, (name, _) in enumerate(cmds[:9]):
+                send.append(f"{name}\t{key_label(f'command_{i + 1}')}", f"win.command_{i + 1}")
+            m.append_submenu("Send to", send)               # beyond nine: no key, no menu entry
         edit = Gio.Menu()
         edit.append(f"Undo\t{key_label('undo')}", "win.undo")
         edit.append(f"Redo\t{key_label('redo')}", "win.redo")
@@ -1989,6 +2062,46 @@ class Pin(Gtk.ApplicationWindow):
         notify(f"Saved {dest}")
         play_sound()
         self.close()
+
+    def run_custom(self, index):
+        """Run the index-th [commands] entry with the exported image."""
+        cmds = commands()
+        if index >= len(cmds):
+            return
+        name, spec = cmds[index]
+        path, temporary = self.export()
+        try:
+            argv = command_argv(spec, path, self.path)
+        except ValueError as e:
+            notify(f"{name}: bad command line ({e})", 3000)
+            if temporary:
+                os.unlink(path)
+            return
+        if not argv:
+            return
+        cleanup = (lambda: os.path.exists(path) and os.unlink(path)) if temporary else None
+        run_detached(argv, cleanup, name)
+        notify(f"Sent to {name}")
+
+    def open_with(self, *a):
+        """The desktop's application chooser for the exported image (portal / GTK)."""
+        path, temporary = self.export()
+        os.makedirs(OPEN_DIR, exist_ok=True)
+        prune_dir(OPEN_DIR)
+        dest = os.path.join(OPEN_DIR, datetime.datetime.now().strftime("snip_%Y%m%d_%H%M%S_%f.png"))
+        shutil.copyfile(path, dest)                    # the chosen app gets a file that outlives the pin
+        if temporary:
+            os.unlink(path)
+        launcher = Gtk.FileLauncher.new(Gio.File.new_for_path(dest))
+        launcher.set_always_ask(True)
+
+        def done(fl, result):
+            try:
+                fl.launch_finish(result)
+            except GLib.Error as e:
+                if "cancel" not in e.message.lower():
+                    notify(f"Cannot open: {e.message}", 3000)
+        launcher.launch(self, None, done)
 
     def print_pin(self, *a, export_to=None):
         """GTK's print dialog; the image with its annotations at screen size (96 dpi),
