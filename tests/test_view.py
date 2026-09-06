@@ -585,3 +585,38 @@ def test_prune_dir_removes_old_files_only(tmp_path, view):
     view.prune_dir(str(tmp_path), 3600)
     assert os.listdir(tmp_path) == ["new.png"]
     view.prune_dir(str(tmp_path / "missing"))                       # no error
+
+
+def test_palette_and_widths_settings(view):
+    assert view.load_palette("") == view.DEFAULT_COLORS
+    pal = view.load_palette("#FF0000, #00ff00,bogus, #0000ff")
+    assert pal == [("colour 1", "#ff0000"), ("colour 2", "#00ff00"), ("colour 3", "#0000ff")]
+    assert view.load_palette("#e5312b")[0] == ("red", "#e5312b")                 # a default keeps its name
+    assert len(view.load_palette(",".join(["#111111"] * 12))) == 9
+    assert view.load_widths("") == view.DEFAULT_WIDTHS
+    assert view.load_widths("8, 2, 4") == [("thin", 2), ("normal", 4), ("thick", 8)]
+    assert view.load_widths("3, 6") == [("thin", 3), ("normal", 6)]
+    assert view.load_widths("1,2,3,4,5,6,7") == [("thin", 1), ("normal", 2), ("3 px", 3), ("4 px", 4), ("5 px", 5)]
+    assert view.load_widths("x") == view.DEFAULT_WIDTHS and view.load_widths("5") == view.DEFAULT_WIDTHS
+    assert view.size_for(view.TEXT_PX, 4, 12, 2.5) == 22 and view.size_for(view.TEXT_PX, 10, 12, 2.5) == 37
+
+
+def test_tool_memory(view, tmp_path, monkeypatch):
+    mem = {}
+    view.remember_tool(mem, "arrow", "#e5312b", 7)
+    view.remember_tool(mem, None, "#000000", 2)
+    assert mem == {"arrow": ("#e5312b", 7)}
+    assert view.recall_tool(mem, "arrow", view.DEFAULT_COLORS, view.DEFAULT_WIDTHS) == (0, 2)
+    assert view.recall_tool(mem, "pen", view.DEFAULT_COLORS, view.DEFAULT_WIDTHS) == (None, None)
+    assert view.recall_tool(mem, "arrow", [("x", "#123456")], [("w", 3)]) == (None, None)   # palette changed
+    monkeypatch.setattr(view, "tool_memory_path", lambda: str(tmp_path / "tc.json"))
+    view.TOOL_MEMORY.clear()
+    view.TOOL_MEMORY.update(mem)
+    view.save_tool_memory()
+    view.TOOL_MEMORY.clear()
+    view.load_tool_memory()
+    assert view.TOOL_MEMORY == {"arrow": ("#e5312b", 7)}
+    (tmp_path / "tc.json").write_text('{"pen": ["nothex", 2], "text": ["#000000", 4]}')
+    view.TOOL_MEMORY.clear()
+    view.load_tool_memory()
+    assert view.TOOL_MEMORY == {"text": ("#000000", 4)}

@@ -357,6 +357,9 @@ PY
         show quality 90
         show copy_file always
         show sound off
+        show palette 'default (7 colours)'
+        show widths '2,4,7'
+        show tool_colors 1
         exit 0 ;;
     --version|-V)
         cat "$HERE/VERSION"; exit 0 ;;
