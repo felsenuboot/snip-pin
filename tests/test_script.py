@@ -497,3 +497,6 @@ def test_toggle_and_close_all_go_to_the_viewer(tmp_path):
     log.unlink()
     assert run(["close-all"], env).returncode == 0
     assert wait_for(log) == ["--close-all"]
+    log.unlink()
+    assert run(["clickthrough"], env).returncode == 0
+    assert wait_for(log) == ["--click-through"]

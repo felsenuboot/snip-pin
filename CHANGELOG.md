@@ -19,6 +19,7 @@ layout) may still change.
 - `autosave_dir`: every capture is also saved to that folder (raw, without annotations), whatever happens to the pin afterwards (#82).
 - `default_tool`: the annotation tool that is active as soon as a pin opens (#78).
 - `snip-pin.sh toggle` hides every pin or shows them all again where they were, with their annotations, zoom and opacity; `snip-pin.sh close-all` closes every pin and asks first when there are several (`confirm_close_all = 0` skips the question) (#64).
+- Click-through: `Ctrl+T` on a pin (dashed border) lets every click, drag and scroll pass to the window below; `snip-pin.sh clickthrough` toggles all pins, which is also the way back since a click-through pin receives no input (#65).
 
 ## [0.3.0] – 2026-09-06
 

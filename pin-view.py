@@ -64,7 +64,7 @@ def hand_over(args):
         s.close()
 
 
-COMMANDS = ("--toggle", "--close-all")     # hand-over requests that address the running pins, not a file
+COMMANDS = ("--toggle", "--close-all", "--click-through")   # requests that address the running pins, not a file
 
 if __name__ == "__main__" and len(sys.argv) >= 2:
     if sys.argv[1] in COMMANDS:
@@ -219,6 +219,7 @@ window.snip-pin {{
     box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.45);   /* dark inner line for light pages */
 }}
 window.snip-pin.editing {{ border-color: {EDIT_COLOR}; }}
+window.snip-pin.ghost {{ border-style: dashed; }}          /* click-through: the mouse goes to what is below */
 .snip-toolbar button {{ padding: 2px 7px; min-height: 22px; min-width: 0; }}
 .snip-toolbar .swatch {{ min-width: 14px; min-height: 14px; padding: 0; margin: 4px 1px;
                          border-radius: 9px; border: 1px solid rgba(0,0,0,0.5); }}
@@ -234,7 +235,7 @@ window.snip-pin.editing {{ border-color: {EDIT_COLOR}; }}
 ACTIONS = {
     "copy": "ctrl+c", "save": "ctrl+s", "close": "", "cancel": "Escape", "confirm": "Return KP_Enter",
     "undo": "ctrl+z", "redo": "ctrl+shift+z ctrl+y",
-    "reset_zoom": "ctrl+0", "reset_opacity": "ctrl+1",
+    "reset_zoom": "ctrl+0", "reset_opacity": "ctrl+1", "click_through": "ctrl+t",
     "width_down": "bracketleft", "width_up": "bracketright", "menu": "F10",
 }
 ACTIONS.update({f"tool_{tool}": key.lower() for tool, key, _, _ in TOOLS})
@@ -424,6 +425,21 @@ def move_window(address, x, y):
     for name in order:
         if hypr(forms[name]).strip() == "ok":
             _move_syntax = name
+            return True
+    return False
+
+
+def set_no_focus(address, on):
+    """Hyprland: a no_focus window is skipped when the window under the pointer is
+    looked up, so every click goes to what is below (the Wayland input region
+    alone is not honoured for toplevels). Lua and classic syntax; the property
+    takes effect at Hyprland's next property refresh, which is requested too."""
+    v = int(on)
+    forms = [f"dispatch hl.dsp.window.set_prop({{ window = 'address:{address}', prop = 'no_focus', value = {v} }})",
+             f"dispatch setprop address:{address} nofocus {v}"]
+    for form in forms:
+        if hypr(form).strip() == "ok":
+            hypr("eval hl.exec_scheduled_prop_refresh_immediately()")
             return True
     return False
 
@@ -682,6 +698,7 @@ class Pin(Gtk.ApplicationWindow):
         self._syncing = False
         self.hovered = False
         self.hidden = False           # set by toggle_pins while every pin is hidden
+        self.ghost = False            # click-through: an empty input region, see set_click_through
         self.toolbar_shown = False    # tracked ourselves: get_visible() is true during the fade-out
         self.hide_timer = None
         self.scroll_acc = 0.0         # smooth-scroll distance not yet turned into a step
@@ -750,7 +767,7 @@ class Pin(Gtk.ApplicationWindow):
         self.menu = Gtk.PopoverMenu.new_from_model(self.build_menu())
         self.menu.set_parent(self.area)
         self.menu.set_has_arrow(False)
-        for name in ("copy", "save", "reset_zoom", "close", "undo", "redo"):
+        for name in ("copy", "save", "reset_zoom", "close", "undo", "redo", "click_through"):
             act = Gio.SimpleAction.new(name, None)
             act.connect("activate", lambda *a, name=name: self.run_action(name))
             self.add_action(act)
@@ -810,6 +827,8 @@ class Pin(Gtk.ApplicationWindow):
         return (x * self.iw / self.area.get_width(), y * self.ih / self.area.get_height())
 
     def draw(self, area, cr, w, h):
+        if self.ghost:
+            self.apply_input_region()
         cr.scale(w / self.iw, h / self.ih)
         Gdk.cairo_set_source_pixbuf(cr, self.pixbuf, 0, 0)
         cr.get_source().set_filter(cairo.FILTER_GOOD)
@@ -870,6 +889,41 @@ class Pin(Gtk.ApplicationWindow):
         self.osd = None
         self.area.queue_draw()
         return False
+
+    # ---- click-through -------------------------------------------------------
+    def set_click_through(self, on):
+        """Let every click, drag and scroll pass to the window below (Snipaste's
+        mouse click-through). The pin keeps no way to receive input, so the way
+        back is the same request from a bind (`snip-pin.sh clickthrough`)."""
+        self.ghost = on
+        if self.address is None:
+            c = self.client()
+            self.address = c["address"] if c else None
+        if self.address:
+            set_no_focus(self.address, on)
+        if on:
+            self.add_css_class("ghost")
+            self.set_tool(None)
+            if self.toolbar_shown:
+                self.toolbar_shown = False
+                self.toolbar.popdown()
+        else:
+            self.remove_css_class("ghost")
+        self.apply_input_region()
+        self.show_osd("click-through" if on else "solid")
+
+    def apply_input_region(self):
+        """GTK recomputes the input region on every layout; draw() runs after
+        layout in the same frame and re-applies the empty one while ghost.
+        (A handler on the surface's "layout" signal would do too, but it makes
+        GTK lay the window out every frame and Hyprland re-centre it endlessly.)"""
+        surface = self.get_surface()
+        if surface is None:
+            return
+        if self.ghost:
+            surface.set_input_region(cairo.Region())
+        else:
+            surface.set_input_region(cairo.Region(cairo.RectangleInt(0, 0, surface.get_width(), surface.get_height())))
 
     # ---- placement via Hyprland (apps cannot position themselves on Wayland)
     def place(self):
@@ -1231,6 +1285,8 @@ class Pin(Gtk.ApplicationWindow):
             self.set_scale(self.base_scale); self.show_osd("100 %")
         elif action == "reset_opacity":
             self.opacity = 1.0; self.set_opacity(1.0); self.show_osd("100 %")
+        elif action == "click_through":
+            self.set_click_through(not self.ghost)
         elif action == "width_down":
             self.set_width(self.width_idx - 1)
         elif action == "width_up":
@@ -1313,6 +1369,7 @@ class Pin(Gtk.ApplicationWindow):
         m.append_section(None, edit)
         tail = Gio.Menu()
         tail.append(f"Reset zoom\t{key_label('reset_zoom')}", "win.reset_zoom")
+        tail.append(f"Click-through\t{key_label('click_through')}", "win.click_through")
         tail.append(f"Close\t{key_label('cancel')}", "win.close")
         m.append_section(None, tail)
         return m
@@ -1416,11 +1473,21 @@ def close_all(app):
     dialog.choose(anchor, None, done)
 
 
+def click_through_all(app):
+    """All pins solid if any is click-through, else all click-through."""
+    wins = pins(app)
+    on = not any(w.ghost for w in wins)
+    for w in wins:
+        w.set_click_through(on)
+
+
 def run_command(app, cmd):
     if cmd == "--toggle":
         toggle_pins(app)
     elif cmd == "--close-all":
         close_all(app)
+    elif cmd == "--click-through":
+        click_through_all(app)
 
 
 def open_pin(app, args):

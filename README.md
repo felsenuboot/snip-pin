@@ -109,6 +109,7 @@ accepted.
 | Copy image and close | `Ctrl+C`, double-click or right-click |
 | Save to the screenshot folder and close | `Ctrl+S` or the middle-click menu |
 | Close without copying | `Esc` |
+| Click-through | `Ctrl+T`: the pin ignores the mouse, everything goes to the window below (dashed border). It cannot take the key back, so bind `snip-pin.sh clickthrough`, which toggles every pin. On Hyprland this sets the window's `no_focus` property; elsewhere the pin relies on an empty input region |
 | Pin more images | drop image files from a file manager onto a pin |
 
 A toolbar appears under the pin while the pointer is over it. Pick a tool and
@@ -152,6 +153,7 @@ opened from the picker appear centred.
 | `snip-pin.sh repeat` | capture the area of the last snip again (a progress bar, a chat window); `repeat 3` the third-last area |
 | `snip-pin.sh toggle` | hide every pin, or show them all again where they were (annotations and zoom stay) |
 | `snip-pin.sh close-all` | close every pin; asks first when there are several |
+| `snip-pin.sh clickthrough` | make every pin click-through, or solid again if any is click-through |
 | `snip-pin.sh clear` | delete every snip that is not kept |
 | `snip-pin.sh doctor` | check the dependencies and print versions |
 

@@ -398,4 +398,5 @@ def test_commands_without_a_viewer_exit_quietly(view):
     r = subprocess.run([os.path.join(ROOT, "pin-view.py"), "--toggle"], env=env,
                        capture_output=True, text=True, timeout=10)
     assert r.returncode == 0 and r.stdout == "" and r.stderr == ""
-    assert "--toggle" in view.COMMANDS and "--close-all" in view.COMMANDS
+    assert "--toggle" in view.COMMANDS and "--close-all" in view.COMMANDS and "--click-through" in view.COMMANDS
+    assert view.ACTIONS["click_through"] == "ctrl+t"
