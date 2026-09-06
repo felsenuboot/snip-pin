@@ -25,6 +25,7 @@ pointer, a magnifier with the pixel colour, and a key-hint panel.
   Ctrl+A               this monitor, again: everything
   R / Shift+R          previous capture areas  F5               refresh the frozen frame
   C                    copy the colour under the pointer        Shift  HEX / RGB
+  Q                    adjust mode on / off (a drag waits for Enter instead of capturing at once)
 """
 import ctypes
 import json
@@ -66,7 +67,8 @@ HINTS = [("Enter", "confirm"), ("Esc", "abort"), ("drag / click", "select / take
          ("Tab", "windows / elements / both / off"),
          ("1 2 / wheel", "parent / child element"), ("Ctrl+A", "this monitor, again: everything"),
          ("R Shift+R", "previous capture areas"), ("W A S D", "move the pointer by 1 px"),
-         ("C", "copy the colour"), ("Shift", "HEX / RGB"), ("F5", "refresh the frame")]
+         ("C", "copy the colour"), ("Shift", "HEX / RGB"), ("F5", "refresh the frame"),
+         ("Q", "adjust mode: a drag waits for Enter")]
 
 
 def parse_color(spec, default):
@@ -377,6 +379,9 @@ class Selector:
             self.redraw()
         elif keyval == Gdk.KEY_F5:
             self.abort(3)
+        elif lower == Gdk.KEY_q:
+            self.adjust = not self.adjust
+            self.redraw()
         elif name in ("Left", "Right", "Up", "Down"):
             step = 10 if shift else 1
             dx = {"Left": -step, "Right": step}.get(name, 0)
@@ -677,7 +682,8 @@ class Overlay(Gtk.Window):
         layout = PangoCairo.create_layout(cr)
         layout.set_font_description(Pango.FontDescription.from_string("Sans 11px"))
         mode = MODES[self.sel.mode]
-        rows = [f"{k}\t{v}" for k, v in HINTS] + [f"detection\t{mode}"]
+        adjust = "on" if self.sel.adjust else "off"
+        rows = [f"{k}\t{v}" for k, v in HINTS] + [f"detection\t{mode}", f"adjust mode\t{adjust}"]
         layout.set_text("\n".join(rows), -1)
         tabs = Pango.TabArray.new(1, True)
         tabs.set_tab(0, Pango.TabAlign.LEFT, 110)
