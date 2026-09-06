@@ -249,8 +249,9 @@ Settings live in `~/.config/snip-pin/config` (`key = value` lines, `#`
 comments; [`config.example`](config.example) lists everything). An environment
 variable `SNIP_PIN_<KEY>` on the bound command overrides a key from the file.
 The viewer re-reads the file whenever a pin is opened, so edits apply to the
-next pin without restarting anything. `snip-pin.sh config` prints the
-effective settings and where each comes from.
+next pin without restarting anything. `snip-pin.sh config --edit` creates the
+file from the example and opens it in your editor; `snip-pin.sh config` prints
+the effective settings and where each comes from.
 
 | Key | Default | Meaning |
 |---|---|---|
