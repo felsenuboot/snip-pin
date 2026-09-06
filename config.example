@@ -22,6 +22,8 @@ text_width = 900              # wrap width in px
 text_margin = 15              # padding in px
 text_fg = #000000
 text_bg = #ffffff
+ocr_lang = eng                # tesseract language(s) for Copy text, e.g. eng+deu (tesseract --list-langs)
+#ocr_cmd =                    # another recogniser: a command reading the PNG %f and printing text
 elements_budget_ms = 150      # time the element detector may spend joining edges
 
 # the selection (slurp): outline colour and width, the dim over the rest of the
@@ -51,6 +53,7 @@ thumb_size = 75               # side of the tile a pin collapses into (Ctrl+M, S
 #save = ctrl+s
 #save_as = ctrl+shift+s       # file dialog; PNG, JPEG or WebP by the extension you type; the pin stays open
 #print = ctrl+p               # GTK's print dialog (printers, print to PDF); the pin stays open
+#ocr = ctrl+shift+c           # copy the recognised text; with a crop marquee drawn, only that part
 #open_with =                  # the desktop's application chooser for the image
 #command_1 = ctrl+shift+1     # ... command_9: the [commands] entries in order
 #close =                      # close without copying (cancel does that when no tool is active)
@@ -86,7 +89,7 @@ thumb_size = 75               # side of the tile a pin collapses into (Ctrl+M, S
 #color_1 = 1                  # ... color_7 = 7
 
 [mouse]
-# right, double, shift_double and middle click: copy, save, save_as, print, open_with, close,
+# right, double, shift_double and middle click: copy, save, save_as, print, ocr, open_with, close,
 # destroy, menu, reset, reset_zoom, thumbnail, command_1 ... command_9 or none
 #right = copy
 #double = copy

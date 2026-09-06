@@ -65,7 +65,8 @@ GNOME and macOS are not, see [docs/decisions.md](docs/decisions.md).
 
 Python 3.11+, PyGObject, GTK 4, `grim`, `slurp`, `wl-clipboard` and `jq`.
 `hyprpicker` (freezes the screen during selection), `python-numpy` (element
-snapping) and `libnotify` (toasts) are optional.
+snapping), `libnotify` (toasts) and `tesseract` with a language pack (*Copy
+text*) are optional.
 
 | Distribution | Packages |
 | --- | --- |
@@ -148,6 +149,7 @@ accepted.
 | Save to the screenshot folder and close | `Ctrl+S` or the middle-click menu; name from the `filename` pattern, `format` png, jpg or webp |
 | Save as… | `Ctrl+Shift+S`: a file dialog preset with the folder, the pattern and the last extension you used; `.png`, `.jpg` or `.webp` picks the encoder. The pin stays open |
 | Send to a program | *Open with…* in the menu asks which application; `[commands]` in the config adds your own entries (`Open in GIMP = gimp %f`, an upload script, …) under *Send to*, the first nine on `Ctrl+Shift+1` … `9` |
+| Copy text | `Ctrl+Shift+C` recognises the text in the pin with `tesseract` and copies it; draw a crop marquee first to read only that part. `ocr_lang` picks the language pack (`eng+deu`), `ocr_cmd` another engine |
 | Print | `Ctrl+P`: GTK's print dialog with the image and its annotations scaled to fit the page; print to PDF works too |
 | Close without copying | `Esc`; `snip-pin.sh reopen` brings the last closed pin back where it was, with zoom, opacity and annotations. `Shift+Esc` destroys it for good |
 | Click-through | `Ctrl+T`: the pin ignores the mouse, everything goes to the window below (dashed border). It cannot take the key back, so bind `snip-pin.sh clickthrough`, which toggles every pin. On Hyprland this sets the window's `no_focus` property; elsewhere the pin relies on an empty input region |
@@ -228,6 +230,8 @@ effective settings and where each comes from.
 | `tap_ms` | `300` | double-tap window for opening the history |
 | `border` | `#ff9f1c` | colour of the 2 px border a pin draws around itself |
 | `save_dir` | unset | where `Ctrl+S` saves; `~` and `$VARS` are expanded |
+| `ocr_lang` | `eng` | tesseract language(s) for *Copy text*, e.g. `eng+deu` |
+| `ocr_cmd` | unset | another OCR engine: a command that reads the PNG `%f` and prints the text |
 | `text_font`, `text_width`, `text_margin`, `text_fg`, `text_bg` | `Sans 11`, `900`, `15`, black on white | how `clipboard` renders copied text |
 | `palette` | 7 colours | up to 9 `#rrggbb` swatches, comma separated, on keys `1`–`9` |
 | `widths` | `2, 4, 7` | 2 to 5 stroke widths in px |
