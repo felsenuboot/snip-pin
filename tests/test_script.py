@@ -347,3 +347,16 @@ def test_selection_look_from_config_with_validation(tmp_path):
     assert run([], env).returncode == 0
     tools = log.read_text()
     assert "slurp -b #00000080 -c #ff0000 -s #00000000 -w 3 -f" in tools           # bad mask: default; no -d
+
+
+def test_cursor_setting_adds_grim_flag(tmp_path):
+    env = make_env(tmp_path, tmp_path / "viewer.log")
+    b, log = fake_tools(tmp_path)
+    env["PATH"] = f"{b}:{env['PATH']}"
+    env["SNIP_NO_ELEMENTS"] = "1"
+    env["SNIP_PIN_CURSOR"] = "1"
+    assert run([], env).returncode == 0
+    assert "grim -g 600,400 400x300 -l 1 -c " in log.read_text()
+    env["SNIP_PIN_CURSOR"] = "0"
+    assert run([], env).returncode == 0
+    assert " -c " not in log.read_text().splitlines()[-2]              # the second grim line

@@ -177,6 +177,7 @@ effective settings and where each comes from.
 | `sel_mask` | `#00000080` | dim over the rest of the screen while selecting |
 | `sel_fill` | `#00000000` | fill inside the selection |
 | `sel_size` | `1` | show the selection's size while dragging; `0` hides it |
+| `cursor` | `0` | `1` includes the mouse cursor in the capture |
 
 Without `save_dir`, `Ctrl+S` saves to the folder named in
 `~/.config/ml4w/settings/screenshot-folder` if that file exists (ML4W
