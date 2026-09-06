@@ -288,7 +288,9 @@ class History(Gtk.ApplicationWindow):
         self.popover = Gtk.PopoverMenu.new_from_model(menu)
         self.popover.set_parent(self.flow)
         self.popover.set_has_arrow(False)
-        self.popover.set_pointing_to(Gdk.Rectangle(x=int(x), y=int(y), width=1, height=1))
+        rect = Gdk.Rectangle()                          # keyword arguments to boxed structs are ignored
+        rect.x, rect.y, rect.width, rect.height = int(x), int(y), 1, 1
+        self.popover.set_pointing_to(rect)
         self.popover.popup()
 
     def menu_action(self, name):

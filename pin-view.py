@@ -710,6 +710,13 @@ def apply_config(force=False):
     _css.load_from_string(build_css(border_color()))
 
 
+def point_rect(x, y):
+    """A 1x1 Gdk.Rectangle at (x, y); PyGObject ignores keyword arguments to boxed structs."""
+    r = Gdk.Rectangle()
+    r.x, r.y, r.width, r.height = int(x), int(y), 1, 1
+    return r
+
+
 def hex_to_rgb(h):
     return tuple(int(h[i:i + 2], 16) / 255 for i in (1, 3, 5))
 
@@ -2510,7 +2517,7 @@ class Pin(Gtk.ApplicationWindow):
     def on_menu(self, x=None, y=None):
         if x is None:
             x, y = self.area.get_width() / 2, self.area.get_height() / 2
-        self.menu.set_pointing_to(Gdk.Rectangle(x=int(x), y=int(y), width=1, height=1))
+        self.menu.set_pointing_to(point_rect(x, y))
         self.menu.popup()
 
     def mouse_action(self, button, x, y):
