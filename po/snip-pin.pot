@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: snip-pin 0.3.0\n"
 "Report-Msgid-Bugs-To: https://github.com/felsenuboot/snip-pin/issues\n"
-"POT-Creation-Date: 2026-09-06 17:29+0200\n"
+"POT-Creation-Date: 2026-09-06 17:36+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,280 +17,292 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: pin-view.py:466
+#: pin-view.py:467
 msgid "Rect"
 msgstr ""
 
-#: pin-view.py:466
+#: pin-view.py:467
 msgid "Rectangle outline"
 msgstr ""
 
-#: pin-view.py:466
+#: pin-view.py:467
 msgid "Ellipse"
 msgstr ""
 
-#: pin-view.py:466
+#: pin-view.py:467
 msgid "Ellipse outline"
 msgstr ""
 
-#: pin-view.py:467
+#: pin-view.py:468
 msgid "Arrow"
 msgstr ""
 
-#: pin-view.py:467
+#: pin-view.py:468
 msgid "Pen"
 msgstr ""
 
-#: pin-view.py:467
+#: pin-view.py:468
 msgid "Freehand pen"
 msgstr ""
 
-#: pin-view.py:468
+#: pin-view.py:469
 msgid "Text"
 msgstr ""
 
-#: pin-view.py:468
+#: pin-view.py:469
 msgid "Text: click, type, Enter"
 msgstr ""
 
-#: pin-view.py:468
+#: pin-view.py:469
 msgid "Numbered step: click"
 msgstr ""
 
-#: pin-view.py:469
+#: pin-view.py:470
 msgid "Mark"
 msgstr ""
 
-#: pin-view.py:469
+#: pin-view.py:470
 msgid "Highlighter"
 msgstr ""
 
-#: pin-view.py:469
+#: pin-view.py:470
 msgid "Blur"
 msgstr ""
 
-#: pin-view.py:469
+#: pin-view.py:470
 msgid "Mosaic (hide secrets)"
 msgstr ""
 
-#: pin-view.py:470
+#: pin-view.py:471
 msgid "Crop"
 msgstr ""
 
-#: pin-view.py:470
+#: pin-view.py:471
 msgid "Crop: drag, Enter applies, Esc cancels"
 msgstr ""
 
-#: pin-view.py:471
+#: pin-view.py:472
 msgid "Erase"
 msgstr ""
 
-#: pin-view.py:471
+#: pin-view.py:472
 msgid "Eraser: click an annotation to remove it"
 msgstr ""
 
-#: pin-view.py:1729
+#: pin-view.py:1824
 #, python-brace-format
 msgid "Moved to group {n}"
 msgstr ""
 
-#: pin-view.py:1787
+#: pin-view.py:1882
 msgid "click-through"
 msgstr ""
 
-#: pin-view.py:1787
+#: pin-view.py:1882
 msgid "solid"
 msgstr ""
 
-#: pin-view.py:2049
+#: pin-view.py:2153
+msgid "upright"
+msgstr ""
+
+#: pin-view.py:2171
 msgid "reset"
 msgstr ""
 
-#: pin-view.py:2149
+#: pin-view.py:2271
 msgid "(Ctrl+click: choose a colour)"
 msgstr ""
 
-#: pin-view.py:2164 pin-view.py:2516
+#: pin-view.py:2286 pin-view.py:2660
 msgid "Undo"
 msgstr ""
 
-#: pin-view.py:2167 pin-view.py:2517
+#: pin-view.py:2289 pin-view.py:2661
 msgid "Redo"
 msgstr ""
 
-#: pin-view.py:2503
+#: pin-view.py:2647
 msgid "Copy image & close"
 msgstr ""
 
-#: pin-view.py:2504
+#: pin-view.py:2648
 msgid "Save to screenshots & close"
 msgstr ""
 
-#: pin-view.py:2505
+#: pin-view.py:2649
 msgid "Save as…"
 msgstr ""
 
-#: pin-view.py:2506
+#: pin-view.py:2650
 msgid "Copy text (OCR)"
 msgstr ""
 
-#: pin-view.py:2507
+#: pin-view.py:2651
 msgid "Print…"
 msgstr ""
 
-#: pin-view.py:2508
+#: pin-view.py:2652
 msgid "Open with…"
 msgstr ""
 
-#: pin-view.py:2514
+#: pin-view.py:2658
 msgid "Send to"
 msgstr ""
 
-#: pin-view.py:2520
+#: pin-view.py:2664
 msgid "Rotate right"
 msgstr ""
 
-#: pin-view.py:2521
+#: pin-view.py:2665
 msgid "Rotate left"
 msgstr ""
 
-#: pin-view.py:2522
+#: pin-view.py:2666
 msgid "Flip horizontally"
 msgstr ""
 
-#: pin-view.py:2523
+#: pin-view.py:2667
 msgid "Flip vertically"
 msgstr ""
 
-#: pin-view.py:2526
+#: pin-view.py:2668
+msgid "Tilt right 1°"
+msgstr ""
+
+#: pin-view.py:2669
+msgid "Tilt left 1°"
+msgstr ""
+
+#: pin-view.py:2672
 msgid "Thumbnail"
 msgstr ""
 
-#: pin-view.py:2529
+#: pin-view.py:2675
 #, python-brace-format
 msgid "Group {n}"
 msgstr ""
 
-#: pin-view.py:2529
+#: pin-view.py:2675
 msgid "(current)"
 msgstr ""
 
-#: pin-view.py:2532
+#: pin-view.py:2679
 msgid "Move to group"
 msgstr ""
 
-#: pin-view.py:2533
+#: pin-view.py:2680
 msgid "Smooth scaling"
 msgstr ""
 
-#: pin-view.py:2534
+#: pin-view.py:2681
 msgid "Reset image"
 msgstr ""
 
-#: pin-view.py:2535
+#: pin-view.py:2682
 msgid "Click-through"
 msgstr ""
 
-#: pin-view.py:2536
+#: pin-view.py:2683
 msgid "Close (snip-pin.sh reopen brings it back)"
 msgstr ""
 
-#: pin-view.py:2537
+#: pin-view.py:2684
 msgid "Destroy"
 msgstr ""
 
-#: pin-view.py:2573 pin-history.py:265
+#: pin-view.py:2725 pin-history.py:266
 msgid "Copied to clipboard"
-msgstr ""
-
-#: pin-view.py:2596
-#, python-brace-format
-msgid "Cannot save to {folder}: {msg}"
-msgstr ""
-
-#: pin-view.py:2599 pin-view.py:2751
-#, python-brace-format
-msgid "Saved {dest}"
-msgstr ""
-
-#: pin-view.py:2614
-#, python-brace-format
-msgid "{name}: bad command line ({e})"
-msgstr ""
-
-#: pin-view.py:2622
-#, python-brace-format
-msgid "Sent to {name}"
-msgstr ""
-
-#: pin-view.py:2641
-#, python-brace-format
-msgid "Cannot open: {msg}"
-msgstr ""
-
-#: pin-view.py:2648
-msgid "No OCR engine: install tesseract (and a language pack)"
-msgstr ""
-
-#: pin-view.py:2660
-msgid "recognising…"
-msgstr ""
-
-#: pin-view.py:2679
-msgid "No text recognised"
-msgstr ""
-
-#: pin-view.py:2686
-#, python-brace-format
-msgid "Copied {n} characters: {first}"
-msgstr ""
-
-#: pin-view.py:2719
-#, python-brace-format
-msgid "Cannot print: {msg}"
-msgstr ""
-
-#: pin-view.py:2722
-msgid "Printing failed"
 msgstr ""
 
 #: pin-view.py:2748
 #, python-brace-format
+msgid "Cannot save to {folder}: {msg}"
+msgstr ""
+
+#: pin-view.py:2751 pin-view.py:2904
+#, python-brace-format
+msgid "Saved {dest}"
+msgstr ""
+
+#: pin-view.py:2766
+#, python-brace-format
+msgid "{name}: bad command line ({e})"
+msgstr ""
+
+#: pin-view.py:2774
+#, python-brace-format
+msgid "Sent to {name}"
+msgstr ""
+
+#: pin-view.py:2793
+#, python-brace-format
+msgid "Cannot open: {msg}"
+msgstr ""
+
+#: pin-view.py:2800
+msgid "No OCR engine: install tesseract (and a language pack)"
+msgstr ""
+
+#: pin-view.py:2812
+msgid "recognising…"
+msgstr ""
+
+#: pin-view.py:2831
+msgid "No text recognised"
+msgstr ""
+
+#: pin-view.py:2839
+#, python-brace-format
+msgid "Copied {n} characters: {first}"
+msgstr ""
+
+#: pin-view.py:2872
+#, python-brace-format
+msgid "Cannot print: {msg}"
+msgstr ""
+
+#: pin-view.py:2875
+msgid "Printing failed"
+msgstr ""
+
+#: pin-view.py:2901
+#, python-brace-format
 msgid "Cannot save {name}: {msg}"
 msgstr ""
 
-#: pin-view.py:2824
+#: pin-view.py:2977
 #, python-brace-format
 msgid "group {n}"
 msgstr ""
 
-#: pin-view.py:2826
+#: pin-view.py:2979
 #, python-brace-format
 msgid "Group {n}: no pins (new pins join it)"
 msgstr ""
 
-#: pin-view.py:2838
+#: pin-view.py:2991
 #, python-brace-format
 msgid "Close {n} pins?"
 msgstr ""
 
-#: pin-view.py:2838 pin-history.py:230
+#: pin-view.py:2991 pin-history.py:230
 msgid "Cancel"
 msgstr ""
 
-#: pin-view.py:2838
+#: pin-view.py:2991
 msgid "Close all"
 msgstr ""
 
-#: pin-view.py:2839
+#: pin-view.py:2992
 msgid "Annotations that were not copied or saved are lost."
 msgstr ""
 
-#: pin-view.py:2889
+#: pin-view.py:3042
 msgid "No closed pin to reopen"
 msgstr ""
 
-#: pin-view.py:2918
+#: pin-view.py:3071
 #, python-brace-format
 msgid "Cannot open {name}"
 msgstr ""

@@ -416,6 +416,7 @@ PY
         show ocr_cmd ''
         show debug 0
         show color_format hex
+        show rotate_export view
         exit 0 ;;
     log)
         [[ -f "$LOG" ]] || { echo "no log at $LOG (set debug = 1 in the config)"; exit 0; }

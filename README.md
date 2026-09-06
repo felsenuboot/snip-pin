@@ -145,7 +145,8 @@ accepted.
 | Opacity | `Ctrl` + wheel, `Ctrl+1` resets |
 | Rotate, flip | `Ctrl+R` / `Ctrl+Shift+R` a quarter turn, `Ctrl+H` / `Ctrl+J` flip; annotations turn with the image, undoable |
 | Thumbnail | `Ctrl+M` or `Shift` + double-click collapses the pin into a 75 px tile at its corner; a click restores it. With the crop tool's marquee drawn, `Shift+Enter` keeps only that part visible as the tile |
-| Reset image | `Ctrl+0`: zoom, opacity, rotation, flips and thumbnail back to normal |
+| Tilt | `Alt` + wheel turns by 1° (`Shift` too: 5°), `Alt` + drag turns the pin around its centre following the pointer, `Ctrl+,` / `Ctrl+.` step by 1°; angles near a right angle snap to it. Copy and save give the tilted image on a transparent background (`rotate_export = original` for the upright pixels) |
+| Reset image | `Ctrl+0`: zoom, opacity, rotation, tilt, flips and thumbnail back to normal |
 | Copy image and close | `Ctrl+C`, double-click or right-click |
 | Save to the screenshot folder and close | `Ctrl+S` or the middle-click menu; name from the `filename` pattern, `format` png, jpg or webp |
 | Save as… | `Ctrl+Shift+S`: a file dialog preset with the folder, the pattern and the last extension you used; `.png`, `.jpg` or `.webp` picks the encoder. The pin stays open |
@@ -261,6 +262,7 @@ effective settings and where each comes from.
 | `alpha_bg` | `transparent` | behind transparent images (clipboard, files): `transparent`, `checker`, or a colour like `#ffffff` |
 | `thumb_size` | `75` | side of the tile a pin collapses into |
 | `reopen` | `5` | how many closed pins `reopen` can bring back; `0` turns it off |
+| `rotate_export` | `view` | what a tilted pin copies or saves: `view` (as seen, transparent corners) or `original` (the upright pixels) |
 | `color_format` | `hex` | output of `snip-pin.sh color`: `hex`, `rgb`, `hsl`, `hsv` or `cmyk` |
 | `debug` | `0` | `1` logs what the script and the viewer do to `~/.local/state/snip-pin/log` (rotated at 1 MB) |
 | `confirm_close_all` | `1` | `close-all` asks before closing more than one pin; `0` closes at once |

@@ -26,6 +26,7 @@ ocr_lang = eng                # tesseract language(s) for Copy text, e.g. eng+de
 #ocr_cmd =                    # another recogniser: a command reading the PNG %f and printing text
 debug = 0                     # 1 writes timestamped lines to ~/.local/state/snip-pin/log (`snip-pin.sh log`)
 color_format = hex            # `snip-pin.sh color`: hex, rgb, hsl, hsv or cmyk
+rotate_export = view          # a tilted pin copies/saves as seen (transparent corners); original = the upright pixels
 elements_budget_ms = 150      # time the element detector may spend joining edges
 
 # the selection (slurp): outline colour and width, the dim over the rest of the
@@ -71,6 +72,10 @@ thumb_size = 75               # side of the tile a pin collapses into (Ctrl+M, S
 #rotate_ccw = ctrl+shift+r
 #flip_h = ctrl+h
 #flip_v = ctrl+j
+#tilt_cw = ctrl+period        # free rotation by 1 degree (Alt+wheel and Alt+drag turn too)
+#tilt_ccw = ctrl+comma
+#tilt_cw_5 = ctrl+shift+period
+#tilt_ccw_5 = ctrl+shift+comma
 #smooth =                     # toggle smooth scaling
 #thumbnail = ctrl+m shift+Return   # collapse into a tile; with a crop marquee, only that part
 #click_through = ctrl+t       # the pin ignores the mouse until `snip-pin.sh clickthrough` (a bind) undoes it

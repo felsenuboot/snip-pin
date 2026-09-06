@@ -38,6 +38,7 @@ layout) may still change.
 - Pin groups: `snip-pin.sh group next|prev|N` shows another group of pins and hides the current one; new pins join the current group, *Move to group* in the menu moves a pin, `toggle` acts on the current group (#70).
 - Translations: the viewer's and the picker's strings go through gettext; a German translation ships in `po/de.po` and `install.sh` compiles it into `~/.local/share/locale` (#90).
 - `snip-pin.sh color` picks a pixel colour with hyprpicker's zoom lens and copies it (`color_format`: hex, rgb, hsl, hsv, cmyk); the first step of #92.
+- Free rotation: `Alt` + wheel (1°, with `Shift` 5°), `Alt` + drag around the centre, or `Ctrl+,` / `Ctrl+.` tilt a pin by any angle; the window becomes the turned image's box with a border along the image, angles near a right angle snap, annotations turn with the image and keep working, and copy or save give the tilted image on a transparent background (`rotate_export = original` for the upright pixels) (#91).
 
 ## [0.3.0] – 2026-09-06
 

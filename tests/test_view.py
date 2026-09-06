@@ -741,3 +741,50 @@ def test_translation_files_are_complete_and_valid():
                                                                                   encoding="utf-8").read()
     for msgid in list(pot_ids)[:10]:
         assert msgid[1:-1].split("\\")[0][:20] in code
+
+
+def test_rotation_geometry(view):
+    import math
+    bw, bh = view.rotated_bbox(100, 50, 0)
+    assert (round(bw), round(bh)) == (100, 50)
+    bw, bh = view.rotated_bbox(100, 50, 90)
+    assert (round(bw), round(bh)) == (50, 100)
+    bw, bh = view.rotated_bbox(100, 100, 45)
+    assert abs(bw - 100 * math.sqrt(2)) < 1e-6 and abs(bh - bw) < 1e-6
+    # the centre maps to the centre, the top-left corner comes back after a turn
+    assert view.unrotate_point(70, 25, 140, 50, 140, 50, 0) == (70, 25)
+    x, y = view.unrotate_point(bw / 2, bh / 2, bw, bh, 100, 100, 45)
+    assert abs(x - 50) < 1e-9 and abs(y - 50) < 1e-9
+    a = math.radians(30)
+    bw, bh = view.rotated_bbox(100, 50, 30)
+    tx, ty = bw / 2 + (-50 * math.cos(a) - -25 * math.sin(a)), bh / 2 + (-50 * math.sin(a) + -25 * math.cos(a))
+    x, y = view.unrotate_point(tx, ty, bw, bh, 100, 50, 30)
+    assert abs(x) < 1e-9 and abs(y) < 1e-9
+    assert view.snap_angle(2) == 0 and view.snap_angle(358) == 0 and view.snap_angle(91.5) == 90
+    assert view.snap_angle(45) == 45 and view.snap_angle(-10) == 350 and view.snap_angle(272) == 270
+
+
+def test_rotated_region_covers_the_turned_rectangle(view):
+    import cairo
+    bw, bh = view.rotated_bbox(100, 100, 45)
+    region = view.rotated_region(100, 100, 45, int(bw) + 1, int(bh) + 1)
+    assert region.contains_point(int(bw / 2), int(bh / 2))
+    assert not region.contains_point(1, 1) and not region.contains_point(int(bw) - 1, 1)
+    upright = view.rotated_region(100, 50, 0, 100, 50)
+    assert upright.contains_point(0, 0) and upright.contains_point(99, 49)
+    assert isinstance(upright, cairo.Region)
+
+
+def test_render_tilted_png(tmp_path, view):
+    from gi.repository import GdkPixbuf
+    src = tmp_path / "s.png"
+    make_png(str(src), 100, 40)
+    pb = GdkPixbuf.Pixbuf.new_from_file(str(src))
+    view.render_tilted_png(pb, [], 90, str(tmp_path / "t.png"))
+    assert png_size(str(tmp_path / "t.png")) == (40, 100)
+    view.render_tilted_png(pb, [], 30, str(tmp_path / "t2.png"))
+    w, h = png_size(str(tmp_path / "t2.png"))
+    bw, bh = view.rotated_bbox(100, 40, 30)
+    assert (w, h) == (int(-(-bw // 1)), int(-(-bh // 1)))
+    for k in ("tilt_cw", "tilt_ccw", "tilt_cw_5", "tilt_ccw_5"):
+        assert k in view.ACTIONS
