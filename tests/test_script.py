@@ -646,6 +646,40 @@ def test_color_subcommand_copies_the_picked_value(tmp_path):
     assert log.read_text().count("-f hex") == 2
 
 
+def test_capture_comes_from_the_frozen_frame(tmp_path):
+    """With the overlay, the capture is cropped out of the frame file, not grabbed again."""
+    viewer_log = tmp_path / "viewer.log"
+    env = make_env(tmp_path, viewer_log)
+    b, log = fake_tools(tmp_path)
+    # the grim stub copies a real 60x40 PPM frame: blue, with a red part at x >= 30
+    ppm = tmp_path / "frame.ppm"
+    rows = b"".join(bytes([255, 0, 0] if x >= 30 else [0, 0, 255]) for _y in range(40) for x in range(60))
+    ppm.write_bytes(b"P6\n60 40\n255\n" + rows)
+    (b / "grim").write_text(f'#!/bin/sh\necho "grim $*" >> "{log}"\nfor a; do f=$a; done\ncp "{ppm}" "$f"\n')
+    (b / "grim").chmod(0o755)
+    env["PATH"] = f"{b}:{env['PATH']}"
+    env["SNIP_NO_ELEMENTS"] = "1"
+    env["SNIP_PIN_SELECT"] = fake_selector(tmp_path, 'printf "20x10+35+5"')
+    assert run([], env).returncode == 0
+    args = wait_for(viewer_log)
+    assert args[0].endswith("_x35_y5.png")
+    tools = log.read_text()
+    assert tools.count("grim") == 1 and "grim -g" not in tools                  # only the frame grab
+    import gi
+    gi.require_version("GdkPixbuf", "2.0")
+    from gi.repository import GdkPixbuf
+    pb = GdkPixbuf.Pixbuf.new_from_file(args[0])
+    assert (pb.get_width(), pb.get_height()) == (20, 10)
+    px = pb.get_pixels()
+    assert (px[0], px[1], px[2]) == (255, 0, 0)                                  # the red part, x >= 30
+    # cursor = 1 forces grim
+    viewer_log.unlink()
+    env["SNIP_PIN_CURSOR"] = "1"
+    assert run([], env).returncode == 0
+    wait_for(viewer_log)
+    assert "grim -g 35,5 20x10 -l 1 -c" in log.read_text()
+
+
 def test_overlay_gets_the_input_and_its_geometry_is_captured(tmp_path):
     viewer_log = tmp_path / "viewer.log"
     env = make_env(tmp_path, viewer_log)
@@ -659,7 +693,7 @@ def test_overlay_gets_the_input_and_its_geometry_is_captured(tmp_path):
     env["SNIP_PIN_SELECT"] = fake_selector(tmp_path, body)
     assert run([], env).returncode == 0
     args = wait_for(viewer_log)
-    assert args[0].endswith("_x50_y60.png") and "grim -g 50,60 300x200" in log.read_text()
+    assert args[0].endswith("_x50_y60.png")
     assert "slurp" not in log.read_text() and "hyprpicker" not in log.read_text()
     import json
     data = json.loads((tmp_path / "input.json").read_text())
