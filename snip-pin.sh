@@ -212,10 +212,11 @@ keep_frame() {
     [[ "$FRAMES" -gt 0 && -s "$src" ]] || return 0
     mkdir -p "$dir"
     stamp=$(date +%Y%m%d_%H%M%S_%N)
-    jq -n -c --arg rects "$rects" --rawfile elems "${elems:-/dev/null}" --argjson ox "${ox:-0}" --argjson oy "${oy:-0}" '
+    jq -n -c --arg rects "$rects" --rawfile elems "${elems:-/dev/null}" --argjson ox "${ox:-0}" --argjson oy "${oy:-0}" \
+        --arg select "${geom:-}" '
         def boxes: [splits("\n") | select(length > 0) | capture("(?<x>-?[0-9]+),(?<y>-?[0-9]+) (?<w>[0-9]+)x(?<h>[0-9]+)")
                     | [.x, .y, .w, .h] | map(tonumber)];
-        {origin: [$ox, $oy], windows: ($rects | boxes), elements: ($elems | boxes)}' > "$dir/$stamp.json" 2>/dev/null
+        {origin: [$ox, $oy], select: $select, windows: ($rects | boxes), elements: ($elems | boxes)}' > "$dir/$stamp.json" 2>/dev/null
     ( "$HERE/pin-view.py" --keep-frame "$src" "$dir/$stamp.png" 2>/dev/null; rm -f "$src"
       command ls -t "$dir"/*.png 2>/dev/null | tail -n +"$((FRAMES + 1))" | while read -r old; do rm -f "$old" "${old%.png}.json"; done ) &
 }

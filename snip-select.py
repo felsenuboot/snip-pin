@@ -2,7 +2,7 @@
 """Selection overlay for snip-pin (GTK 4 + gtk4-layer-shell): Snipaste's snip mode.
 
 usage: snip-select.py FRAME.ppm < input.json  ->  prints WxH+X+Y, exit 0
-       exit 1: aborted (Esc, right-click); exit 3: refresh requested (F5)
+       exit 1: aborted (Esc, right-click); exit 3: refresh requested but not possible in-process
        exit 127: gtk4-layer-shell is not available (the caller falls back to slurp)
 
 input.json: {"monitors": [{"name", "x", "y", "width", "height", "scale", "transform"}, ...],
@@ -209,9 +209,11 @@ def color_text(rgb, hex_mode):
 class Selector:
     """The shared selection state; one Overlay window per monitor draws it."""
 
-    def __init__(self, app, frame, data):
+    def __init__(self, app, frame, data, frame_path=None):
         self.app = app
         self.frame = frame
+        self.frame_file = frame_path       # F5 regrabs into this file; the caller crops from it
+        self.blank = False                 # True while the overlay paints nothing so grim sees the screen
         self.live = (frame, [tuple(r) for r in data.get("windows", []) if len(r) == 4],
                      [tuple(r) for r in data.get("elements", []) if len(r) == 4])   # the current screen
         self.frames = [f for f in data.get("frames", []) if isinstance(f, dict) and f.get("png")]
@@ -300,6 +302,7 @@ class Selector:
         idx = max(-1, min(len(self.frames) - 1, self.frame_idx + step))
         if idx == self.frame_idx:
             return
+        meta = {}
         if idx == -1:
             frame, windows, elements, path = self.live[0], self.live[1], self.live[2], None
         else:
@@ -320,9 +323,47 @@ class Selector:
         self.frame_idx, self.frame, self.frame_path = idx, frame, path
         self.windows, self.elements = windows, elements
         self.depth = 0
+        self.active_anchor = None
+        # the area that was snipped from that screen comes back as the selection
+        old = parse_geom(meta.get("select", "")) if idx >= 0 else None
+        if old:
+            self.selection = clamp_rect(old, self.bounds)
+        elif idx >= 0:
+            self.selection = None
         for w in self.windows_:
             w.set_crop()
         self.redraw()
+
+    def refresh(self):
+        """F5: paint nothing for a couple of frames, grab the screen (into the frame
+        file the caller crops from), show the new frame. Unmapping the overlay and
+        grabbing from outside raced the compositor and captured the old overlay."""
+        if self.blank or self.frame_idx >= 0:
+            if self.frame_idx >= 0:
+                self.show_frame(-len(self.frames))          # back to the live screen first
+            if self.blank:
+                return
+        self.blank = True
+        self.redraw()
+        GLib.timeout_add(120, self._grab)
+
+    def _grab(self):
+        path = self.frame_file or "/tmp/snip-pin-frame.ppm"
+        try:
+            subprocess.run(["grim", "-s", "1", "-t", "ppm", path], check=True, timeout=5,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            frame = GdkPixbuf.Pixbuf.new_from_file(path)
+        except (OSError, subprocess.SubprocessError, GLib.Error) as e:
+            print(f"snip-select: refresh: {e}", file=sys.stderr)
+            frame = None
+        self.blank = False
+        if frame is not None:
+            self.frame = frame
+            self.live = (frame, self.live[1], self.live[2])
+            for w in self.windows_:
+                w.set_crop()
+        self.redraw()
+        return False
 
     def frame_age(self):
         if self.frame_idx < 0:
@@ -436,7 +477,7 @@ class Selector:
             self.hex_mode = not self.hex_mode
             self.redraw()
         elif keyval == Gdk.KEY_F5:
-            self.abort(3)
+            self.refresh()
         elif lower == Gdk.KEY_q:
             self.adjust = not self.adjust
             self.redraw()
@@ -482,6 +523,11 @@ class Overlay(Gtk.Window):
             if mon is not None:
                 LayerShell.set_monitor(self, mon)
         self.set_default_size(rect[2], rect[3])
+        css = Gtk.CssProvider()
+        css.load_from_string("window.snip-select { background: transparent; }")
+        Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), css,
+                                                  Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        self.add_css_class("snip-select")
         self.area = Gtk.DrawingArea()
         self.area.set_draw_func(self.draw)
         self.area.set_cursor(Gdk.Cursor.new_from_name("crosshair"))
@@ -611,6 +657,8 @@ class Overlay(Gtk.Window):
     # ---- drawing ------------------------------------------------------------------
     def draw(self, area, cr, w, h):
         sel = self.sel
+        if sel.blank:                                       # F5 in progress: let the screen through
+            return
         Gdk.cairo_set_source_pixbuf(cr, self.crop, 0, 0)
         cr.paint()
         # dim everything but the selection (or the candidate while nothing is selected)
@@ -790,7 +838,7 @@ def main():
     state = {}
 
     def activate(app):
-        sel = Selector(app, frame, data)
+        sel = Selector(app, frame, data, sys.argv[1])
         state["sel"] = sel
         for win in sel.windows_:
             win.present()
