@@ -218,6 +218,7 @@ effective settings and where each comes from.
 | `tap_ms` | `300` | double-tap window for opening the history |
 | `border` | `#ff9f1c` | colour of the 2 px border a pin draws around itself |
 | `save_dir` | unset | where `Ctrl+S` saves; `~` and `$VARS` are expanded |
+| `sound` | `off` | play a sound on copy and save: `default` (the sound theme's screen-capture event via `canberra-gtk-play`, or GTK's player) or a sound file |
 | `copy_file` | `always` | a copied pin is offered as a file too, so file managers and chat clients paste a file; `never` offers PNG only |
 | `filename` | `pin_%Y%m%d_%H%M%S` | strftime pattern for saved files (quick save, Save as, autosave, `save` mode) |
 | `format` | `png` | quick save and autosave format: `png`, `jpg` or `webp` |
