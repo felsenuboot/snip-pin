@@ -662,3 +662,25 @@ def test_renumber_and_move(view):
     assert op["pts"] == [(3, -1), (7, 3)] and "_mosaic" not in op
     assert "eraser" in {t for t, _, _, _ in view.TOOLS} and "eraser" in view.CLICK_TOOLS
     assert view.ACTIONS["delete"] == "Delete" and "erase" in view.MARKERS and "move" in view.MARKERS
+
+
+def test_render_text_png_wraps_and_sizes(tmp_path, view):
+    out = tmp_path / "t.png"
+    w, h = view.render_text_png("Hello, world", str(out), "Sans 11", 900, 15)
+    assert png_size(str(out)) == (w, h) and 40 < w < 300 and 20 < h < 60
+    w2, h2 = view.render_text_png("word " * 200, str(out), "Sans 11", 300, 10)
+    assert w2 <= 320 and h2 > h                                           # wrapped at 300 px
+
+
+def test_render_text_cli(tmp_path):
+    import subprocess
+    from conftest import ROOT
+    src = tmp_path / "in.txt"
+    src.write_text("line one\nline two\n")
+    out = tmp_path / "out.png"
+    r = subprocess.run([os.path.join(ROOT, "pin-view.py"), "--render-text", str(src), str(out), "Monospace 10", "400",
+                        "8", "#ffffff", "#202020"], capture_output=True, text=True, timeout=20)
+    assert r.returncode == 0 and out.exists(), r.stderr
+    src.write_text("   \n")
+    assert subprocess.run([os.path.join(ROOT, "pin-view.py"), "--render-text", str(src), str(out)],
+                          capture_output=True, timeout=20).returncode == 1

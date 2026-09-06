@@ -43,7 +43,8 @@ GTK 4 viewer; no daemon, no portal.
   included, as pixels and as a file, and closes it. Copy-only and save-only modes for keys of their own.
 - 🕘 **History.** Snips are kept for a week, or for good if you star them: pin
   the last one again, pick one from a thumbnail grid, repeat the last capture
-  area, or pin the image that is in the clipboard.
+  area, or pin the image that is in the clipboard; copied text is rendered
+  into an image and pinned too.
 - 🖥️ **Whole screen.** Capture the monitor under the pointer, or every monitor,
   without a selection.
 - ⚙️ **A config file.** Keys and mouse buttons rebindable, colours, save and
@@ -195,7 +196,7 @@ opened from the picker appear centred.
 | `snip-pin.sh save` | select and save to the screenshot folder, no pin |
 | `snip-pin.sh last` | pin the newest snip again, where it was taken |
 | `snip-pin.sh history` | open a thumbnail grid of all cached snips, newest first |
-| `snip-pin.sh clipboard` | pin the image in the clipboard (PNG, JPEG, WebP, … or a copied image file), centred on the screen |
+| `snip-pin.sh clipboard` | pin the image in the clipboard (PNG, JPEG, WebP, … or a copied image file), centred on the screen; copied text is rendered as an image and pinned (`text_font`, `text_width`, colours in the config) |
 | `snip-pin.sh screen` | capture the monitor under the pointer without a selection and pin it; `screen all` captures every monitor as one image |
 | `snip-pin.sh repeat` | capture the area of the last snip again (a progress bar, a chat window); `repeat 3` the third-last area |
 | `snip-pin.sh reopen` | bring the last closed pin back as it was (the last `reopen` = 5 closed pins are kept for the session) |
@@ -227,6 +228,7 @@ effective settings and where each comes from.
 | `tap_ms` | `300` | double-tap window for opening the history |
 | `border` | `#ff9f1c` | colour of the 2 px border a pin draws around itself |
 | `save_dir` | unset | where `Ctrl+S` saves; `~` and `$VARS` are expanded |
+| `text_font`, `text_width`, `text_margin`, `text_fg`, `text_bg` | `Sans 11`, `900`, `15`, black on white | how `clipboard` renders copied text |
 | `palette` | 7 colours | up to 9 `#rrggbb` swatches, comma separated, on keys `1`–`9` |
 | `widths` | `2, 4, 7` | 2 to 5 stroke widths in px |
 | `tool_colors` | `1` | each tool remembers its own colour and width, across pins and restarts |

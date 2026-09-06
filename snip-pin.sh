@@ -15,7 +15,7 @@
 #   snip-pin.sh save       select, capture, save to the screenshot folder; no pin
 #   snip-pin.sh last       pin the newest cached snip again
 #   snip-pin.sh history    thumbnail picker for cached snips
-#   snip-pin.sh clipboard  pin the image in the clipboard
+#   snip-pin.sh clipboard  pin the image in the clipboard (or its text, rendered as an image)
 #   snip-pin.sh pin FILE   pin an image file, centred (used by the history picker)
 #   snip-pin.sh screen     capture the monitor under the pointer, no selection
 #   snip-pin.sh screen all capture every monitor as one image
@@ -216,8 +216,25 @@ case "${1:-}" in
             # shellcheck disable=SC2001
             [[ "$uri" == file://* ]] && src=$(printf '%b' "$(sed 's/%\([0-9A-Fa-f]\{2\}\)/\\x\1/g' <<< "${uri#file://}")")
             [[ -f "$src" ]] || { notify "The clipboard holds no image"; exit 0; }
+        elif ttype=$(grep -m1 -E '^text/plain' <<< "$types") && text=$(wl-paste --type "$ttype" 2>/dev/null) \
+             && [[ -n "${text//[[:space:]]/}" ]]; then
+            # Text to image: a copied error message, snippet or URL becomes a pin.
+            # A single line naming an image file pins that file instead.
+            line="${text#"${text%%[![:space:]]*}"}"; line="${line%"${line##*[![:space:]]}"}"
+            if [[ "$line" != *$'\n'* && -f "${line/#\~/$HOME}" && "${line,,}" =~ \.(png|jpe?g|webp|bmp|gif|tiff?)$ ]]; then
+                src="${line/#\~/$HOME}"
+            else
+                tmp=$(mktemp); printf '%s' "$text" > "$tmp"
+                file="$CACHE/$(date +%Y%m%d_%H%M%S_%N)_text.png"
+                if "$HERE/pin-view.py" --render-text "$tmp" "$file" "${SNIP_PIN_TEXT_FONT:-Sans 11}" \
+                        "$(int_or SNIP_PIN_TEXT_WIDTH 900)" "$(int_or SNIP_PIN_TEXT_MARGIN 15)" \
+                        "$(color_or SNIP_PIN_TEXT_FG '#000000')" "$(color_or SNIP_PIN_TEXT_BG '#ffffff')"; then
+                    rm -f "$tmp"; pin_file "$file"; exit 0
+                fi
+                rm -f "$tmp"; notify "The clipboard text cannot be rendered"; exit 1
+            fi
         else
-            notify "The clipboard holds no image"; exit 0
+            notify "The clipboard holds no image or text"; exit 0
         fi
         file="$CACHE/$(date +%Y%m%d_%H%M%S_%N)_clipboard.png"
         if [[ "$(head -c 8 "$src" | od -An -tx1 | tr -d ' \n')" == 89504e470d0a1a0a ]]; then
@@ -360,6 +377,11 @@ PY
         show palette 'default (7 colours)'
         show widths '2,4,7'
         show tool_colors 1
+        show text_font 'Sans 11'
+        show text_width 900
+        show text_margin 15
+        show text_fg '#000000'
+        show text_bg '#ffffff'
         exit 0 ;;
     --version|-V)
         cat "$HERE/VERSION"; exit 0 ;;

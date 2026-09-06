@@ -74,7 +74,60 @@ def hand_over(args):
 
 COMMANDS = ("--toggle", "--close-all", "--click-through", "--reopen")   # requests to the running pins, not a file
 
+
+def render_text_png(text, out_path, font="Sans 11", max_width=900, margin=15, fg="#000000", bg="#ffffff"):
+    """Lay text out with Pango (wrapped at max_width) and write it as a PNG:
+    Snipaste's "Text to Image" for a clipboard that holds text but no image.
+    Needs cairo and Pango only, not GTK."""
+    import cairo
+    import gi
+    gi.require_version("Pango", "1.0")
+    gi.require_version("PangoCairo", "1.0")
+    from gi.repository import Pango, PangoCairo
+
+    def rgb(h):
+        h = h if len(h) == 7 and h.startswith("#") else "#000000"
+        return tuple(int(h[i:i + 2], 16) / 255 for i in (1, 3, 5))
+    text = text.replace("\r\n", "\n").replace("\r", "\n").rstrip("\n")
+    probe = cairo.Context(cairo.ImageSurface(cairo.FORMAT_ARGB32, 1, 1))
+    layout = PangoCairo.create_layout(probe)
+    layout.set_font_description(Pango.FontDescription.from_string(font))
+    layout.set_width(max(50, int(max_width)) * Pango.SCALE)
+    layout.set_wrap(Pango.WrapMode.WORD_CHAR)
+    layout.set_text(text, -1)
+    _, logical = layout.get_pixel_extents()
+    w, h = logical.width + 2 * margin, logical.height + 2 * margin
+    surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, max(1, w), max(1, h))
+    cr = cairo.Context(surf)
+    cr.set_source_rgb(*rgb(bg))
+    cr.paint()
+    cr.set_source_rgb(*rgb(fg))
+    cr.move_to(margin - logical.x, margin - logical.y)
+    layout = PangoCairo.create_layout(cr)
+    layout.set_font_description(Pango.FontDescription.from_string(font))
+    layout.set_width(max(50, int(max_width)) * Pango.SCALE)
+    layout.set_wrap(Pango.WrapMode.WORD_CHAR)
+    layout.set_text(text, -1)
+    PangoCairo.show_layout(cr, layout)
+    surf.flush()
+    surf.write_to_png(out_path)
+    return w, h
+
+
 if __name__ == "__main__" and len(sys.argv) >= 2:
+    if sys.argv[1] == "--render-text":
+        # pin-view.py --render-text IN OUT [FONT WIDTH MARGIN FG BG]: used by snip-pin.sh clipboard
+        a = sys.argv[2:] + [""] * 7
+        with open(a[0], encoding="utf-8", errors="replace") as f:
+            body = f.read()
+        if not body.strip():
+            sys.exit(1)
+        try:
+            width, margin = int(a[3] or 900), int(a[4] or 15)
+        except ValueError:
+            width, margin = 900, 15
+        render_text_png(body, a[1], a[2] or "Sans 11", width, margin, a[5] or "#000000", a[6] or "#ffffff")
+        sys.exit(0)
     if sys.argv[1] in COMMANDS:
         if hand_over(sys.argv[1:2]) or sys.argv[1] != "--reopen":
             sys.exit(0)                        # no viewer: no pins to act on; only --reopen starts one
