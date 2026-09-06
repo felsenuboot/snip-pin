@@ -41,7 +41,9 @@ import warnings
 # no process ever takes the socket over from another. Elsewhere a path in
 # $XDG_RUNTIME_DIR is used.
 RUNTIME_DIR = os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir()
-if sys.platform.startswith("linux"):
+if os.environ.get("SNIP_PIN_SOCKET"):
+    SOCKET = os.environ["SNIP_PIN_SOCKET"]          # override: tests
+elif sys.platform.startswith("linux"):
     SOCKET = "\0snip-pin-%d" % os.getuid()
 else:
     SOCKET = os.path.join(RUNTIME_DIR, "snip-pin.sock")
@@ -62,7 +64,12 @@ def hand_over(args):
         s.close()
 
 
+COMMANDS = ("--toggle", "--close-all")     # hand-over requests that address the running pins, not a file
+
 if __name__ == "__main__" and len(sys.argv) >= 2:
+    if sys.argv[1] in COMMANDS:
+        hand_over(sys.argv[1:2])               # no viewer: no pins to act on, nothing to start
+        sys.exit(0)
     if hand_over([os.path.abspath(sys.argv[1])] + sys.argv[2:]):
         sys.exit(0)
 
@@ -651,7 +658,7 @@ class Pin(Gtk.ApplicationWindow):
         # application would keep the process alive after a failed load
         pixbuf = GdkPixbuf.Pixbuf.new_from_file(path)
         _seq += 1
-        super().__init__(application=app, title=f"snip-pin #{_seq}" if pos else "snip-pin")
+        super().__init__(application=app, title=f"snip-pin #{_seq}")
         self.path = path
         self.pos = pos
         self.pixbuf = pixbuf
@@ -674,6 +681,7 @@ class Pin(Gtk.ApplicationWindow):
         self.address = None           # Hyprland window address once known (placement, crop)
         self._syncing = False
         self.hovered = False
+        self.hidden = False           # set by toggle_pins while every pin is hidden
         self.toolbar_shown = False    # tracked ourselves: get_visible() is true during the fade-out
         self.hide_timer = None
         self.scroll_acc = 0.0         # smooth-scroll distance not yet turned into a step
@@ -1360,6 +1368,61 @@ class Pin(Gtk.ApplicationWindow):
         notify(f"Saved {dest}")
         self.close()
 
+def pins(app):
+    return [w for w in app.get_windows() if isinstance(w, Pin)]
+
+
+def toggle_pins(app):
+    """Hide every pin, or show them all again where they were (Hyprland forgets
+    the position of an unmapped window, so each pin re-places itself)."""
+    wins = pins(app)
+    if any(w.get_visible() for w in wins):
+        for w in wins:
+            if w.get_visible():
+                c = w.client()
+                if c is not None:
+                    w.pos = (c["at"][0] + BORDER, c["at"][1] + BORDER)
+                w.hidden = True
+                w.set_visible(False)
+    else:
+        for w in wins:
+            w.hidden = False
+            w.address = None               # a remapped surface is a new Hyprland client
+            w.present()
+            w.place()
+
+
+def close_all(app):
+    """Close every pin; with more than one, ask first (confirm_close_all = 0 skips the question)."""
+    wins = pins(app)
+    if not wins:
+        return
+    if len(wins) == 1 or CFG.get("confirm_close_all", "1").strip() in ("0", "no", "false"):
+        for w in wins:
+            w.close()
+        return
+    dialog = Gtk.AlertDialog(message=f"Close {len(wins)} pins?", buttons=["Cancel", "Close all"],
+                             detail="Annotations that were not copied or saved are lost.",
+                             default_button=1, cancel_button=0)
+
+    def done(d, result):
+        try:
+            if d.choose_finish(result) == 1:
+                for w in pins(app):
+                    w.close()
+        except GLib.Error:
+            pass
+    anchor = next((w for w in wins if w.get_visible()), wins[0])
+    dialog.choose(anchor, None, done)
+
+
+def run_command(app, cmd):
+    if cmd == "--toggle":
+        toggle_pins(app)
+    elif cmd == "--close-all":
+        close_all(app)
+
+
 def open_pin(app, args):
     """Open a pin for [path, x, y]; a bad file tells the user instead of crashing."""
     path = args[0]
@@ -1434,7 +1497,9 @@ def serve(app):
             # acknowledge first: the client must not wait for GTK, and must
             # not start its own viewer when the file turns out to be bad
             conn.sendall(b"1")
-            if args:
+            if args and args[0] in COMMANDS:
+                run_command(app, args[0])
+            elif args:
                 open_pin(app, args)
         except OSError:
             pass

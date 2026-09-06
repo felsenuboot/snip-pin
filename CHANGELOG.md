@@ -18,6 +18,7 @@ layout) may still change.
 - `snip-pin.sh copy` and `snip-pin.sh save` select and copy or save without pinning; `action` in the config sets what the bare command does (`copy`, `save`, `pin` joined by `+`, default `copy+pin`) (#77).
 - `autosave_dir`: every capture is also saved to that folder (raw, without annotations), whatever happens to the pin afterwards (#82).
 - `default_tool`: the annotation tool that is active as soon as a pin opens (#78).
+- `snip-pin.sh toggle` hides every pin or shows them all again where they were, with their annotations, zoom and opacity; `snip-pin.sh close-all` closes every pin and asks first when there are several (`confirm_close_all = 0` skips the question) (#64).
 
 ## [0.3.0] – 2026-09-06
 
