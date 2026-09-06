@@ -389,3 +389,13 @@ def test_default_tool_setting(view, monkeypatch, capsys):
     monkeypatch.setenv("SNIP_PIN_DEFAULT_TOOL", "lasso")
     assert view.default_tool() is None and view.default_tool() is None
     assert capsys.readouterr().err.count("unknown tool") == 1               # warned once, not per pin
+
+
+def test_commands_without_a_viewer_exit_quietly(view):
+    import subprocess
+    from conftest import ROOT
+    env = dict(os.environ, SNIP_PIN_SOCKET="/nonexistent-dir-for-test/sock")   # never the user's live viewer
+    r = subprocess.run([os.path.join(ROOT, "pin-view.py"), "--toggle"], env=env,
+                       capture_output=True, text=True, timeout=10)
+    assert r.returncode == 0 and r.stdout == "" and r.stderr == ""
+    assert "--toggle" in view.COMMANDS and "--close-all" in view.COMMANDS

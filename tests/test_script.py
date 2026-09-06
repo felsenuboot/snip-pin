@@ -487,3 +487,13 @@ def test_autosave_dir_gets_every_capture(tmp_path):
     env["SNIP_PIN_AUTOSAVE_DIR"] = "/proc/nope"
     assert run(["copy"], env).returncode == 0
     assert log.read_text().count("grim") == 3
+
+
+def test_toggle_and_close_all_go_to_the_viewer(tmp_path):
+    log = tmp_path / "viewer.log"
+    env = make_env(tmp_path, log)
+    assert run(["toggle"], env).returncode == 0
+    assert wait_for(log) == ["--toggle"]
+    log.unlink()
+    assert run(["close-all"], env).returncode == 0
+    assert wait_for(log) == ["--close-all"]

@@ -150,6 +150,8 @@ opened from the picker appear centred.
 | `snip-pin.sh clipboard` | pin the image in the clipboard (PNG, JPEG, WebP, … or a copied image file), centred on the screen |
 | `snip-pin.sh screen` | capture the monitor under the pointer without a selection and pin it; `screen all` captures every monitor as one image |
 | `snip-pin.sh repeat` | capture the area of the last snip again (a progress bar, a chat window); `repeat 3` the third-last area |
+| `snip-pin.sh toggle` | hide every pin, or show them all again where they were (annotations and zoom stay) |
+| `snip-pin.sh close-all` | close every pin; asks first when there are several |
 | `snip-pin.sh clear` | delete every snip that is not kept |
 | `snip-pin.sh doctor` | check the dependencies and print versions |
 
@@ -185,6 +187,7 @@ effective settings and where each comes from.
 | `cursor` | `0` | `1` includes the mouse cursor in the capture |
 | `areas` | `8` | capture areas remembered for `repeat` |
 | `default_tool` | `none` | tool active as soon as a pin opens: `rect`, `ellipse`, `arrow`, `pen`, `text`, `counter`, `marker`, `blur` |
+| `confirm_close_all` | `1` | `close-all` asks before closing more than one pin; `0` closes at once |
 | `action` | `copy+pin` | what a bare `snip-pin.sh` (and `screen`, `repeat`) does with the capture: `copy`, `save`, `pin`, joined by `+` |
 
 Without `save_dir`, `Ctrl+S` saves to the folder named in
