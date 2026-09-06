@@ -1,0 +1,228 @@
+# German translation of snip-pin.
+msgid ""
+msgstr ""
+"Project-Id-Version: snip-pin\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "Rect"
+msgstr "Rechteck"
+
+msgid "Rectangle outline"
+msgstr "Rechteck (Umriss)"
+
+msgid "Ellipse"
+msgstr "Ellipse"
+
+msgid "Ellipse outline"
+msgstr "Ellipse (Umriss)"
+
+msgid "Arrow"
+msgstr "Pfeil"
+
+msgid "Pen"
+msgstr "Stift"
+
+msgid "Freehand pen"
+msgstr "Freihandstift"
+
+msgid "Text"
+msgstr "Text"
+
+msgid "Text: click, type, Enter"
+msgstr "Text: klicken, tippen, Enter"
+
+msgid "Numbered step: click"
+msgstr "Nummerierter Schritt: klicken"
+
+msgid "Mark"
+msgstr "Marker"
+
+msgid "Highlighter"
+msgstr "Textmarker"
+
+msgid "Blur"
+msgstr "Pixeln"
+
+msgid "Mosaic (hide secrets)"
+msgstr "Mosaik (Geheimnisse verbergen)"
+
+msgid "Crop"
+msgstr "Zuschneiden"
+
+msgid "Crop: drag, Enter applies, Esc cancels"
+msgstr "Zuschneiden: ziehen, Enter übernimmt, Esc bricht ab"
+
+msgid "Erase"
+msgstr "Radierer"
+
+msgid "Eraser: click an annotation to remove it"
+msgstr "Radierer: eine Anmerkung anklicken, um sie zu entfernen"
+
+msgid "Moved to group {n}"
+msgstr "In Gruppe {n} verschoben"
+
+msgid "click-through"
+msgstr "durchklickbar"
+
+msgid "solid"
+msgstr "normal"
+
+msgid "reset"
+msgstr "zurückgesetzt"
+
+msgid "(Ctrl+click: choose a colour)"
+msgstr "(Strg+Klick: Farbe wählen)"
+
+msgid "Undo"
+msgstr "Rückgängig"
+
+msgid "Redo"
+msgstr "Wiederholen"
+
+msgid "Copy image & close"
+msgstr "Bild kopieren und schließen"
+
+msgid "Save to screenshots & close"
+msgstr "In den Screenshot-Ordner speichern und schließen"
+
+msgid "Save as…"
+msgstr "Speichern unter …"
+
+msgid "Copy text (OCR)"
+msgstr "Text kopieren (OCR)"
+
+msgid "Print…"
+msgstr "Drucken …"
+
+msgid "Open with…"
+msgstr "Öffnen mit …"
+
+msgid "Send to"
+msgstr "Senden an"
+
+msgid "Rotate right"
+msgstr "Nach rechts drehen"
+
+msgid "Rotate left"
+msgstr "Nach links drehen"
+
+msgid "Flip horizontally"
+msgstr "Horizontal spiegeln"
+
+msgid "Flip vertically"
+msgstr "Vertikal spiegeln"
+
+msgid "Thumbnail"
+msgstr "Miniatur"
+
+msgid "Group {n}"
+msgstr "Gruppe {n}"
+
+msgid "(current)"
+msgstr "(aktuell)"
+
+msgid "Move to group"
+msgstr "In Gruppe verschieben"
+
+msgid "Smooth scaling"
+msgstr "Weiche Skalierung"
+
+msgid "Reset image"
+msgstr "Bild zurücksetzen"
+
+msgid "Click-through"
+msgstr "Durchklickbar"
+
+msgid "Close (snip-pin.sh reopen brings it back)"
+msgstr "Schließen (snip-pin.sh reopen holt es zurück)"
+
+msgid "Destroy"
+msgstr "Verwerfen"
+
+msgid "Copied to clipboard"
+msgstr "In die Zwischenablage kopiert"
+
+msgid "Cannot save to {folder}: {msg}"
+msgstr "Speichern in {folder} nicht möglich: {msg}"
+
+msgid "Saved {dest}"
+msgstr "Gespeichert: {dest}"
+
+msgid "{name}: bad command line ({e})"
+msgstr "{name}: ungültige Befehlszeile ({e})"
+
+msgid "Sent to {name}"
+msgstr "An {name} gesendet"
+
+msgid "Cannot open: {msg}"
+msgstr "Öffnen nicht möglich: {msg}"
+
+msgid "No OCR engine: install tesseract (and a language pack)"
+msgstr "Keine Texterkennung: tesseract (und ein Sprachpaket) installieren"
+
+msgid "recognising…"
+msgstr "erkenne …"
+
+msgid "No text recognised"
+msgstr "Kein Text erkannt"
+
+msgid "Copied {n} characters: {first}"
+msgstr "{n} Zeichen kopiert: {first}"
+
+msgid "Cannot print: {msg}"
+msgstr "Drucken nicht möglich: {msg}"
+
+msgid "Printing failed"
+msgstr "Drucken fehlgeschlagen"
+
+msgid "Cannot save {name}: {msg}"
+msgstr "{name} kann nicht gespeichert werden: {msg}"
+
+msgid "group {n}"
+msgstr "Gruppe {n}"
+
+msgid "Group {n}: no pins (new pins join it)"
+msgstr "Gruppe {n}: keine Pins (neue Pins kommen hinzu)"
+
+msgid "Close {n} pins?"
+msgstr "{n} Pins schließen?"
+
+msgid "Cancel"
+msgstr "Abbrechen"
+
+msgid "Close all"
+msgstr "Alle schließen"
+
+msgid "Annotations that were not copied or saved are lost."
+msgstr "Anmerkungen, die nicht kopiert oder gespeichert wurden, gehen verloren."
+
+msgid "No closed pin to reopen"
+msgstr "Kein geschlossener Pin zum Wiederherstellen"
+
+msgid "Cannot open {name}"
+msgstr "{name} kann nicht geöffnet werden"
+
+msgid "Snip history"
+msgstr "Snip-Verlauf"
+
+msgid "No snips in the last days."
+msgstr "Keine Snips in den letzten Tagen."
+
+msgid "double-click / Enter pin  ·  right-click copy  ·  F keep  ·  Del remove  ·  arrows / WASD / HJKL move"
+msgstr "Doppelklick / Enter anpinnen  ·  Rechtsklick kopieren  ·  F behalten  ·  Entf löschen  ·  Pfeile / WASD / HJKL bewegen"
+
+msgid "Clear history"
+msgstr "Verlauf leeren"
+
+msgid "Clear the history?"
+msgstr "Verlauf leeren?"
+
+msgid "Every snip that is not kept (★) is deleted."
+msgstr "Jeder Snip, der nicht behalten wird (★), wird gelöscht."
+
+msgid "Clear"
+msgstr "Leeren"

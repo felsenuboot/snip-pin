@@ -1,0 +1,326 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the snip-pin package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: snip-pin 0.3.0\n"
+"Report-Msgid-Bugs-To: https://github.com/felsenuboot/snip-pin/issues\n"
+"POT-Creation-Date: 2026-09-06 17:29+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: pin-view.py:466
+msgid "Rect"
+msgstr ""
+
+#: pin-view.py:466
+msgid "Rectangle outline"
+msgstr ""
+
+#: pin-view.py:466
+msgid "Ellipse"
+msgstr ""
+
+#: pin-view.py:466
+msgid "Ellipse outline"
+msgstr ""
+
+#: pin-view.py:467
+msgid "Arrow"
+msgstr ""
+
+#: pin-view.py:467
+msgid "Pen"
+msgstr ""
+
+#: pin-view.py:467
+msgid "Freehand pen"
+msgstr ""
+
+#: pin-view.py:468
+msgid "Text"
+msgstr ""
+
+#: pin-view.py:468
+msgid "Text: click, type, Enter"
+msgstr ""
+
+#: pin-view.py:468
+msgid "Numbered step: click"
+msgstr ""
+
+#: pin-view.py:469
+msgid "Mark"
+msgstr ""
+
+#: pin-view.py:469
+msgid "Highlighter"
+msgstr ""
+
+#: pin-view.py:469
+msgid "Blur"
+msgstr ""
+
+#: pin-view.py:469
+msgid "Mosaic (hide secrets)"
+msgstr ""
+
+#: pin-view.py:470
+msgid "Crop"
+msgstr ""
+
+#: pin-view.py:470
+msgid "Crop: drag, Enter applies, Esc cancels"
+msgstr ""
+
+#: pin-view.py:471
+msgid "Erase"
+msgstr ""
+
+#: pin-view.py:471
+msgid "Eraser: click an annotation to remove it"
+msgstr ""
+
+#: pin-view.py:1729
+#, python-brace-format
+msgid "Moved to group {n}"
+msgstr ""
+
+#: pin-view.py:1787
+msgid "click-through"
+msgstr ""
+
+#: pin-view.py:1787
+msgid "solid"
+msgstr ""
+
+#: pin-view.py:2049
+msgid "reset"
+msgstr ""
+
+#: pin-view.py:2149
+msgid "(Ctrl+click: choose a colour)"
+msgstr ""
+
+#: pin-view.py:2164 pin-view.py:2516
+msgid "Undo"
+msgstr ""
+
+#: pin-view.py:2167 pin-view.py:2517
+msgid "Redo"
+msgstr ""
+
+#: pin-view.py:2503
+msgid "Copy image & close"
+msgstr ""
+
+#: pin-view.py:2504
+msgid "Save to screenshots & close"
+msgstr ""
+
+#: pin-view.py:2505
+msgid "Save as…"
+msgstr ""
+
+#: pin-view.py:2506
+msgid "Copy text (OCR)"
+msgstr ""
+
+#: pin-view.py:2507
+msgid "Print…"
+msgstr ""
+
+#: pin-view.py:2508
+msgid "Open with…"
+msgstr ""
+
+#: pin-view.py:2514
+msgid "Send to"
+msgstr ""
+
+#: pin-view.py:2520
+msgid "Rotate right"
+msgstr ""
+
+#: pin-view.py:2521
+msgid "Rotate left"
+msgstr ""
+
+#: pin-view.py:2522
+msgid "Flip horizontally"
+msgstr ""
+
+#: pin-view.py:2523
+msgid "Flip vertically"
+msgstr ""
+
+#: pin-view.py:2526
+msgid "Thumbnail"
+msgstr ""
+
+#: pin-view.py:2529
+#, python-brace-format
+msgid "Group {n}"
+msgstr ""
+
+#: pin-view.py:2529
+msgid "(current)"
+msgstr ""
+
+#: pin-view.py:2532
+msgid "Move to group"
+msgstr ""
+
+#: pin-view.py:2533
+msgid "Smooth scaling"
+msgstr ""
+
+#: pin-view.py:2534
+msgid "Reset image"
+msgstr ""
+
+#: pin-view.py:2535
+msgid "Click-through"
+msgstr ""
+
+#: pin-view.py:2536
+msgid "Close (snip-pin.sh reopen brings it back)"
+msgstr ""
+
+#: pin-view.py:2537
+msgid "Destroy"
+msgstr ""
+
+#: pin-view.py:2573 pin-history.py:265
+msgid "Copied to clipboard"
+msgstr ""
+
+#: pin-view.py:2596
+#, python-brace-format
+msgid "Cannot save to {folder}: {msg}"
+msgstr ""
+
+#: pin-view.py:2599 pin-view.py:2751
+#, python-brace-format
+msgid "Saved {dest}"
+msgstr ""
+
+#: pin-view.py:2614
+#, python-brace-format
+msgid "{name}: bad command line ({e})"
+msgstr ""
+
+#: pin-view.py:2622
+#, python-brace-format
+msgid "Sent to {name}"
+msgstr ""
+
+#: pin-view.py:2641
+#, python-brace-format
+msgid "Cannot open: {msg}"
+msgstr ""
+
+#: pin-view.py:2648
+msgid "No OCR engine: install tesseract (and a language pack)"
+msgstr ""
+
+#: pin-view.py:2660
+msgid "recognising…"
+msgstr ""
+
+#: pin-view.py:2679
+msgid "No text recognised"
+msgstr ""
+
+#: pin-view.py:2686
+#, python-brace-format
+msgid "Copied {n} characters: {first}"
+msgstr ""
+
+#: pin-view.py:2719
+#, python-brace-format
+msgid "Cannot print: {msg}"
+msgstr ""
+
+#: pin-view.py:2722
+msgid "Printing failed"
+msgstr ""
+
+#: pin-view.py:2748
+#, python-brace-format
+msgid "Cannot save {name}: {msg}"
+msgstr ""
+
+#: pin-view.py:2824
+#, python-brace-format
+msgid "group {n}"
+msgstr ""
+
+#: pin-view.py:2826
+#, python-brace-format
+msgid "Group {n}: no pins (new pins join it)"
+msgstr ""
+
+#: pin-view.py:2838
+#, python-brace-format
+msgid "Close {n} pins?"
+msgstr ""
+
+#: pin-view.py:2838 pin-history.py:230
+msgid "Cancel"
+msgstr ""
+
+#: pin-view.py:2838
+msgid "Close all"
+msgstr ""
+
+#: pin-view.py:2839
+msgid "Annotations that were not copied or saved are lost."
+msgstr ""
+
+#: pin-view.py:2889
+msgid "No closed pin to reopen"
+msgstr ""
+
+#: pin-view.py:2918
+#, python-brace-format
+msgid "Cannot open {name}"
+msgstr ""
+
+#: pin-history.py:130
+msgid "Snip history"
+msgstr ""
+
+#: pin-history.py:143
+msgid "No snips in the last days."
+msgstr ""
+
+#: pin-history.py:147
+msgid ""
+"double-click / Enter pin  ·  right-click copy  ·  F keep  ·  Del remove  ·  "
+"arrows / WASD / HJKL move"
+msgstr ""
+
+#: pin-history.py:151
+msgid "Clear history"
+msgstr ""
+
+#: pin-history.py:228
+msgid "Clear the history?"
+msgstr ""
+
+#: pin-history.py:229
+msgid "Every snip that is not kept (★) is deleted."
+msgstr ""
+
+#: pin-history.py:230
+msgid "Clear"
+msgstr ""
