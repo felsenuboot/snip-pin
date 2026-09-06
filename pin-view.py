@@ -193,6 +193,17 @@ def crop_frame(frame_path, origin, geom, out_path):
 
 
 if __name__ == "__main__" and len(sys.argv) >= 2:
+    if sys.argv[1] == "--keep-frame":
+        # pin-view.py --keep-frame FRAME.ppm OUT.png: the whole screen for the overlay's history
+        import gi
+        gi.require_version("GdkPixbuf", "2.0")
+        from gi.repository import GdkPixbuf
+        try:
+            GdkPixbuf.Pixbuf.new_from_file(sys.argv[2]).savev(sys.argv[3], "png", ["compression"], ["1"])
+        except Exception as e:  # noqa: BLE001
+            print(f"pin-view: keep-frame: {e}", file=sys.stderr)
+            sys.exit(1)
+        sys.exit(0)
     if sys.argv[1] == "--crop":
         # pin-view.py --crop FRAME OX OY WxH+X+Y OUT: the capture comes from the frozen
         # frame, so it shows exactly what the selection showed (no overlay in the shot)

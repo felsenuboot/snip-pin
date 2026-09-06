@@ -58,3 +58,9 @@ def test_move_anchor_and_anchor_near(select):
     assert select.move_anchor(r, "e", -200, 0) == (-90, 20, 100, 50)           # dragged past the far edge: flips
     assert select.anchor_near(r, 110, 70) == "se" and select.anchor_near(r, 60, 20) == "n"
     assert select.anchor_near(r, 60, 45) is None
+
+
+def test_frame_label(select):
+    assert select.frame_label(None) == "now"
+    assert select.frame_label(12) == "12 s ago" and select.frame_label(200) == "3 min ago"
+    assert select.frame_label(7200) == "2.0 h ago"

@@ -42,6 +42,7 @@ sel_magnify = 9               # overlay: magnifier factor
 sel_adjust = 0                # overlay: 1 = a drag leaves an adjustable selection (anchors), Enter or a double-click confirms
 cursor = 0                    # 1 includes the mouse cursor in the capture
 areas = 8                     # capture areas remembered for `snip-pin.sh repeat [N]`
+frames = 20                   # whole screens kept (PNG in the cache, several MB each) for `,` / `.` in the overlay; 0 = off
 action = copy+pin             # what a bare `snip-pin.sh` does after the capture: copy, save, pin, joined by +
 default_tool = none           # tool active on a new pin: none, rect, ellipse, arrow, pen, text, counter, marker, blur
 confirm_close_all = 1         # `snip-pin.sh close-all` asks before closing several pins; 0 closes at once
