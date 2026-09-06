@@ -542,3 +542,42 @@ def test_sound_plays_on_copy_mode(tmp_path):
     assert run(["copy"], env).returncode == 0
     time.sleep(0.3)
     assert f"canberra-gtk-play -f {tmp_path}/ding.oga" in log.read_text()
+
+
+def test_clipboard_text_is_rendered_and_pinned(tmp_path):
+    viewer_log = tmp_path / "viewer.log"
+    env = make_env(tmp_path, viewer_log)
+    txt = tmp_path / "clip.txt"
+    txt.write_text("Traceback (most recent call last):\n  File x, line 1\nValueError: boom\n")
+    b = fake_wl_paste(tmp_path, ["text/plain;charset=utf-8", "TEXT"], {"text/plain;charset=utf-8": txt})
+    env["PATH"] = f"{b}:{env['PATH']}"
+    env["SNIP_PIN_TEXT_FONT"] = "Monospace 10"
+    assert run(["clipboard"], env).returncode == 0
+    args = wait_for(viewer_log)
+    assert args[0].endswith("_text.png") and os.path.exists(args[0])
+    with open(args[0], "rb") as f:
+        assert f.read(8) == b"\x89PNG\r\n\x1a\n"
+
+
+def test_clipboard_text_naming_an_image_file_pins_the_file(tmp_path):
+    viewer_log = tmp_path / "viewer.log"
+    env = make_env(tmp_path, viewer_log)
+    img = tmp_path / "photo.png"
+    make_png_file(str(img))
+    txt = tmp_path / "clip.txt"
+    txt.write_text(f"  {img}\n")
+    env["PATH"] = f"{fake_wl_paste(tmp_path, ['text/plain'], {'text/plain': txt})}:{env['PATH']}"
+    assert run(["clipboard"], env).returncode == 0
+    args = wait_for(viewer_log)
+    assert args[0].endswith("_clipboard.png") and os.path.getsize(args[0]) == os.path.getsize(img)
+
+
+def make_png_file(path):
+    import struct
+    import zlib
+    raw = b"".join(b"\x00" + b"\xff\x00\x00" * 4 for _ in range(4))
+    def chunk(t, d):
+        return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
+    with open(path, "wb") as f:
+        f.write(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 4, 4, 8, 2, 0, 0, 0))
+                + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
