@@ -85,7 +85,7 @@ gi.require_version("Gdk", "4.0")
 gi.require_version("GdkPixbuf", "2.0")
 gi.require_version("Pango", "1.0")
 gi.require_version("PangoCairo", "1.0")
-from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk, Pango, PangoCairo
+from gi.repository import Gdk, GdkPixbuf, Gio, GLib, GObject, Gtk, Pango, PangoCairo
 
 APP_ID = "snip-pin"
 ZOOM_STEP = 1.10
@@ -615,6 +615,75 @@ def remember_extension(ext):
             f.write(ext)
     except OSError:
         pass
+
+
+# ---- clipboard -------------------------------------------------------------
+# The viewer owns the clipboard itself (GTK) instead of spawning wl-copy, so
+# it can offer the image as image/png and as a file (text/uri-list) at once:
+# an image editor takes the pixels, a file manager or a chat client the file.
+# Whoever owns a Wayland clipboard must stay alive to serve it, so after the
+# last pin closes the process lingers (app.hold) until another program takes
+# the clipboard over, then exits and removes the file it offered.
+CLIP_DIR = os.path.join(RUNTIME_DIR, "snip-pin", "clip")
+
+
+def copy_as_file():
+    return CFG.get("copy_file", "always").strip().lower() not in ("never", "0", "no", "false")
+
+
+def clip_file_path(path):
+    """Where the offered file lives: the export copied into the runtime dir, so
+    it outlives the pin and the cache's expiry but not the session."""
+    return os.path.join(CLIP_DIR, datetime.datetime.now().strftime("snip_%Y%m%d_%H%M%S") + os.path.splitext(path)[1])
+
+
+class ClipboardOwner:
+    """Sets the clipboard content and keeps the application alive while it is ours."""
+    def __init__(self, app):
+        self.app = app
+        self.holding = False
+        self.file = None
+        self.clipboard = Gdk.Display.get_default().get_clipboard()
+        self.clipboard.connect("changed", self.on_changed)
+
+    def offer(self, png_path, as_file):
+        texture = Gdk.Texture.new_from_filename(png_path)
+        providers = [Gdk.ContentProvider.new_for_value(GObject.Value(Gdk.Texture, texture))]
+        self.drop_file()
+        if as_file:
+            os.makedirs(CLIP_DIR, exist_ok=True)
+            self.file = clip_file_path(png_path)
+            shutil.copyfile(png_path, self.file)
+            files = Gdk.FileList.new_from_list([Gio.File.new_for_path(self.file)])
+            providers.append(Gdk.ContentProvider.new_for_value(GObject.Value(Gdk.FileList, files)))
+        self.clipboard.set_content(Gdk.ContentProvider.new_union(providers))
+        if not self.holding:
+            self.holding = True
+            self.app.hold()
+
+    def on_changed(self, clipboard):
+        if self.holding and not clipboard.is_local():        # somebody else owns it now
+            self.holding = False
+            self.drop_file()
+            self.app.release()
+
+    def drop_file(self):
+        if self.file:
+            try:
+                os.unlink(self.file)
+            except OSError:
+                pass
+            self.file = None
+
+
+_clip = None
+
+
+def clipboard_owner(app):
+    global _clip
+    if _clip is None:
+        _clip = ClipboardOwner(app)
+    return _clip
 
 
 def unique_path(folder, stem, ext):
@@ -1836,8 +1905,10 @@ class Pin(Gtk.ApplicationWindow):
     def copy(self, *a):
         path, temporary = self.export()
         try:
-            # wl-copy reads all of stdin, then forks a helper that keeps
-            # serving the clipboard after we exit
+            clipboard_owner(self.get_application()).offer(path, copy_as_file())
+        except (GLib.Error, OSError) as e:
+            # no display clipboard (odd session) or an unreadable export: fall back to wl-copy, PNG only
+            print(f"pin-view: clipboard: {e}; using wl-copy", file=sys.stderr)
             with open(path, "rb") as f:
                 subprocess.run(["wl-copy", "--type", "image/png"], stdin=f)
         finally:

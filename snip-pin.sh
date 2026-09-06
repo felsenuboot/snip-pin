@@ -339,6 +339,7 @@ PY
         show filename 'pin_%Y%m%d_%H%M%S'
         show format png
         show quality 90
+        show copy_file always
         exit 0 ;;
     --version|-V)
         cat "$HERE/VERSION"; exit 0 ;;

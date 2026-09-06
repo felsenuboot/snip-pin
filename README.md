@@ -39,7 +39,7 @@ GTK 4 viewer; no daemon, no portal.
   disk stays untouched.
 - 📋 **Clipboard first.** Every snip lands in the clipboard as well; `Ctrl+C`,
   a double-click or a right-click on a pin copies it again, annotations
-  included, and closes it. Copy-only and save-only modes for keys of their own.
+  included, as pixels and as a file, and closes it. Copy-only and save-only modes for keys of their own.
 - 🕘 **History.** Snips are kept for a week, or for good if you star them: pin
   the last one again, pick one from a thumbnail grid, repeat the last capture
   area, or pin the image that is in the clipboard.
@@ -217,6 +217,7 @@ effective settings and where each comes from.
 | `tap_ms` | `300` | double-tap window for opening the history |
 | `border` | `#ff9f1c` | colour of the 2 px border a pin draws around itself |
 | `save_dir` | unset | where `Ctrl+S` saves; `~` and `$VARS` are expanded |
+| `copy_file` | `always` | a copied pin is offered as a file too, so file managers and chat clients paste a file; `never` offers PNG only |
 | `filename` | `pin_%Y%m%d_%H%M%S` | strftime pattern for saved files (quick save, Save as, autosave, `save` mode) |
 | `format` | `png` | quick save and autosave format: `png`, `jpg` or `webp` |
 | `quality` | `90` | JPEG and WebP quality |

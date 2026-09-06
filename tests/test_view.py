@@ -539,3 +539,12 @@ def test_last_extension_round_trip(tmp_path, view, monkeypatch):
     assert view.last_extension() == ".webp"
     (tmp_path / "state" / "last-ext").write_text(".exe")
     assert view.last_extension() == ".png"
+
+
+def test_clipboard_settings_and_paths(view, monkeypatch):
+    monkeypatch.setenv("SNIP_PIN_COPY_FILE", "never")
+    assert view.copy_as_file() is False
+    monkeypatch.setenv("SNIP_PIN_COPY_FILE", "always")
+    assert view.copy_as_file() is True
+    p = view.clip_file_path("/tmp/x/snip-pin-abc.png")
+    assert p.startswith(view.CLIP_DIR) and p.endswith(".png") and "snip_" in os.path.basename(p)
