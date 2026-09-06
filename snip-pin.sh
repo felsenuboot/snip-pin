@@ -70,6 +70,13 @@ load_config
 int_or() { if [[ "${!1:-}" =~ ^[0-9]+$ ]]; then echo "${!1}"; else echo "$2"; fi; }
 KEEP=$(int_or SNIP_PIN_KEEP_DAYS 7)
 TAP_MS=$(int_or SNIP_PIN_TAP_MS 300)
+# colour settings (#rrggbb or #rrggbbaa); anything else falls back to the default
+color_or() { if [[ "${!1:-}" =~ ^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$ ]]; then echo "${!1}"; else echo "$2"; fi; }
+SEL_BORDER=$(color_or SNIP_PIN_SEL_BORDER '#888888ff')     # slurp: selection outline
+SEL_WIDTH=$(int_or SNIP_PIN_SEL_WIDTH 1)                  #        outline width in px
+SEL_MASK=$(color_or SNIP_PIN_SEL_MASK '#00000080')         #        dim over the rest of the screen
+SEL_FILL=$(color_or SNIP_PIN_SEL_FILL '#00000000')         #        fill inside the selection
+SEL_SIZE=$(int_or SNIP_PIN_SEL_SIZE 1)                    #        1 = show the size while dragging
 
 mkdir -p "$CACHE/kept" "$STATE"
 [[ "$KEEP" -gt 0 ]] && find "$CACHE" -maxdepth 1 -name '*.png' -mtime +"$KEEP" -delete 2>/dev/null
@@ -219,6 +226,11 @@ PY
         show border '#ff9f1c'
         show save_dir ''
         show elements_budget_ms 150
+        show sel_border '#888888ff'
+        show sel_width 1
+        show sel_mask '#00000080'
+        show sel_fill '#00000000'
+        show sel_size 1
         exit 0 ;;
     --version|-V)
         cat "$HERE/VERSION"; exit 0 ;;
@@ -280,7 +292,9 @@ else
     # inside a window win over the window itself. It runs in the background so
     # its PID can be recorded for `abort`.
     geom_file=$(mktemp)
-    printf '%s\n' "$rects" | cat - "$elems" | slurp -b "#00000080" -c "#888888ff" -w 1 -f "%wx%h+%x+%y" > "$geom_file" &
+    slurp_opts=(-b "$SEL_MASK" -c "$SEL_BORDER" -s "$SEL_FILL" -w "$SEL_WIDTH")
+    [[ "$SEL_SIZE" -ne 0 ]] && slurp_opts+=(-d)
+    printf '%s\n' "$rects" | cat - "$elems" | slurp "${slurp_opts[@]}" -f "%wx%h+%x+%y" > "$geom_file" &
     echo $! > "$STATE/slurp"
     wait $!
     rc=$?

@@ -144,6 +144,7 @@ def test_selection_path_with_fake_tools(tmp_path):
     assert os.path.exists(args[0])
     tools = log.read_text()
     assert "grim -g 600,400 400x300" in tools and "wl-copy" in tools
+    assert "slurp -b #00000080 -c #888888ff -s #00000000 -w 1 -d -f" in tools      # the default look
     assert not os.path.exists(tmp_path / "run" / "snip-pin" / "selecting")   # cleaned up
     # windows on both monitors' workspaces and the special workspace; not on an
     # inactive workspace, not unmapped, not hidden
@@ -333,3 +334,16 @@ def test_config_file_keep_days_is_applied(tmp_path):
     os.utime(stale, (time.time() - 5 * 86400,) * 2)               # older than 2 days, younger than 7
     run(["bogus"], env)
     assert not stale.exists()
+
+
+def test_selection_look_from_config_with_validation(tmp_path):
+    env = make_env(tmp_path, tmp_path / "viewer.log")
+    b, log = fake_tools(tmp_path)
+    env["PATH"] = f"{b}:{env['PATH']}"
+    env["SNIP_NO_ELEMENTS"] = "1"
+    cfg = tmp_path / ".config" / "snip-pin"
+    cfg.mkdir(parents=True)
+    (cfg / "config").write_text("sel_border = #ff0000\nsel_width = 3\nsel_mask = notacolour\nsel_size = 0\n")
+    assert run([], env).returncode == 0
+    tools = log.read_text()
+    assert "slurp -b #00000080 -c #ff0000 -s #00000000 -w 3 -f" in tools           # bad mask: default; no -d

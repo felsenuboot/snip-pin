@@ -172,6 +172,11 @@ effective settings and where each comes from.
 | `border` | `#ff9f1c` | colour of the 2 px border a pin draws around itself |
 | `save_dir` | unset | where `Ctrl+S` saves; `~` and `$VARS` are expanded |
 | `elements_budget_ms` | `150` | time the element detector may spend joining edges |
+| `sel_border` | `#888888ff` | outline colour of the selection (`#rrggbb` or `#rrggbbaa`) |
+| `sel_width` | `1` | outline width in px |
+| `sel_mask` | `#00000080` | dim over the rest of the screen while selecting |
+| `sel_fill` | `#00000000` | fill inside the selection |
+| `sel_size` | `1` | show the selection's size while dragging; `0` hides it |
 
 Without `save_dir`, `Ctrl+S` saves to the folder named in
 `~/.config/ml4w/settings/screenshot-folder` if that file exists (ML4W

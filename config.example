@@ -9,6 +9,14 @@ border = #ff9f1c              # colour of the 2 px border around a pin
 #save_dir = ~/Pictures/Screenshots   # where Ctrl+S saves; default: ML4W setting or the XDG pictures folder
 elements_budget_ms = 150      # time the element detector may spend joining edges
 
+# the selection (slurp): outline colour and width, the dim over the rest of the
+# screen, the fill inside the selection (#rrggbb or #rrggbbaa), size readout
+sel_border = #888888ff
+sel_width = 1
+sel_mask = #00000080
+sel_fill = #00000000
+sel_size = 1                  # 0 hides the WxH readout while dragging
+
 [keys]
 # action = binding [binding ...]; modifiers ctrl, shift, alt, super; an empty
 # value unbinds. Key names as GDK knows them (Escape, Return, F10, bracketleft,
