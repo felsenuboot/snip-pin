@@ -152,7 +152,7 @@ the keys:
 |---|---|
 | Select | drag, or click the highlighted window / element |
 | Confirm / abort | `Enter`, a double-click or the middle button / `Esc`, right-click |
-| Adjust | drag an anchor or the inside of a selection; arrows move it by 1 px (`Shift` 10, `Ctrl` resizes). With `sel_adjust = 1` every drag waits for `Enter` |
+| Adjust | drag an anchor or the inside of a selection; arrows move it by 1 px (`Shift` 10, `Ctrl` resizes). Hover or grab an anchor (it turns orange) and the arrows or `W A S D` move that corner or edge instead. With `sel_adjust = 1` every drag waits for `Enter` |
 | Detection | `Tab` cycles both / windows / elements / off; `1` / `2` or the wheel pick the parent or child element |
 | Whole screen | `Ctrl+A` selects the monitor under the pointer, again every monitor |
 | Previous areas | `R` / `Shift+R` step through the last capture areas |
