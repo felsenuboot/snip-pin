@@ -530,7 +530,17 @@ else
             rc=$?
             geom=$(<"$geom_file"); rm -f "$geom_file"
             log "overlay rc=$rc geom=$geom"
-            if [[ $rc -eq 3 ]]; then select_geom=$geom; geom=''; rm -f "$frame"; log "refresh requested"; continue; fi
+            if [[ $rc -eq 3 ]]; then
+                # F5: grab a fresh frame, but only once the old overlay is off the
+                # screen, or the new frame is a picture of the old overlay
+                select_geom=$geom; geom=''; rm -f "$frame"
+                for _w in 1 2 3 4 5 6 7 8 9 10; do
+                    hyprctl layers -j 2>/dev/null | grep -q '"namespace": *"snip-pin-select"' || break
+                    sleep 0.05
+                done
+                sleep 0.05
+                log "refresh requested"; continue
+            fi
             break
         done
         [[ $rc -eq 127 ]] && log "no gtk4-layer-shell: falling back to slurp"

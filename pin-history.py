@@ -8,7 +8,7 @@ usage: pin-history.py CACHE_DIR SNIP_PIN_SH
   right-click     menu: pin, copy, keep, delete
   F or *          keep / unkeep: kept snips never expire
   Delete          remove it from the cache
-  Esc             close (right-click on empty space closes too)
+  Esc             close
   Clear button    remove every snip that is not kept
 
 Snips are the PNG files in CACHE_DIR and CACHE_DIR/kept, newest first. Pinning
@@ -161,13 +161,10 @@ class History(Gtk.ApplicationWindow):
         keys.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)   # before any child sees the key
         keys.connect("key-pressed", self.on_key)
         self.add_controller(keys)
-        # right-click on a thumbnail copies it; anywhere else just closes
+        # right-click on a thumbnail opens its menu; elsewhere it does nothing (Esc closes)
         rclick = Gtk.GestureClick(button=3)
         rclick.connect("pressed", self.on_rclick)
         self.flow.add_controller(rclick)
-        rclose = Gtk.GestureClick(button=3)
-        rclose.connect("pressed", lambda *a: self.close())
-        self.add_controller(rclose)
         for name in ("pin", "copy", "keep", "delete"):
             act = Gio.SimpleAction.new(name, None)
             act.connect("activate", lambda *a, name=name: self.menu_action(name))
