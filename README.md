@@ -143,7 +143,8 @@ accepted.
 | Thumbnail | `Ctrl+M` or `Shift` + double-click collapses the pin into a 75 px tile at its corner; a click restores it. With the crop tool's marquee drawn, `Shift+Enter` keeps only that part visible as the tile |
 | Reset image | `Ctrl+0`: zoom, opacity, rotation, flips and thumbnail back to normal |
 | Copy image and close | `Ctrl+C`, double-click or right-click |
-| Save to the screenshot folder and close | `Ctrl+S` or the middle-click menu |
+| Save to the screenshot folder and close | `Ctrl+S` or the middle-click menu; name from the `filename` pattern, `format` png, jpg or webp |
+| Save as… | `Ctrl+Shift+S`: a file dialog preset with the folder, the pattern and the last extension you used; `.png`, `.jpg` or `.webp` picks the encoder. The pin stays open |
 | Close without copying | `Esc`; `snip-pin.sh reopen` brings the last closed pin back where it was, with zoom, opacity and annotations. `Shift+Esc` destroys it for good |
 | Click-through | `Ctrl+T`: the pin ignores the mouse, everything goes to the window below (dashed border). It cannot take the key back, so bind `snip-pin.sh clickthrough`, which toggles every pin. On Hyprland this sets the window's `no_focus` property; elsewhere the pin relies on an empty input region |
 | Pin more images | drop image files from a file manager onto a pin |
@@ -216,6 +217,9 @@ effective settings and where each comes from.
 | `tap_ms` | `300` | double-tap window for opening the history |
 | `border` | `#ff9f1c` | colour of the 2 px border a pin draws around itself |
 | `save_dir` | unset | where `Ctrl+S` saves; `~` and `$VARS` are expanded |
+| `filename` | `pin_%Y%m%d_%H%M%S` | strftime pattern for saved files (quick save, Save as, autosave, `save` mode) |
+| `format` | `png` | quick save and autosave format: `png`, `jpg` or `webp` |
+| `quality` | `90` | JPEG and WebP quality |
 | `autosave_dir` | unset | every capture is also saved there (the raw capture, without annotations) |
 | `elements_budget_ms` | `150` | time the element detector may spend joining edges |
 | `sel_border` | `#888888ff` | outline colour of the selection (`#rrggbb` or `#rrggbbaa`) |

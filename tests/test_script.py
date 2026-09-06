@@ -503,3 +503,21 @@ def test_toggle_and_close_all_go_to_the_viewer(tmp_path):
     log.unlink()
     assert run(["reopen"], env).returncode == 0
     assert wait_for(log) == ["--reopen"]
+
+
+def test_save_mode_honours_filename_and_format(tmp_path):
+    env = make_env(tmp_path, tmp_path / "viewer.log")
+    b, log = fake_tools(tmp_path)
+    env["PATH"] = f"{b}:{env['PATH']}"
+    env["SNIP_NO_ELEMENTS"] = "1"
+    env["SNIP_PIN_SAVE_DIR"] = str(tmp_path / "out")
+    env["SNIP_PIN_FILENAME"] = "shot_%Y"
+    env["SNIP_PIN_FORMAT"] = "jpg"
+    # the grim stub writes "png" bytes, which no encoder can read: the conversion fails, the snip survives
+    assert run(["save"], env).returncode == 0
+    assert not (tmp_path / "out").exists() or not os.listdir(tmp_path / "out")
+    env["SNIP_PIN_FORMAT"] = "png"
+    assert run(["save"], env).returncode == 0
+    assert run(["save"], env).returncode == 0
+    year = time.strftime("%Y")
+    assert sorted(os.listdir(tmp_path / "out")) == [f"shot_{year}.png", f"shot_{year}_2.png"]

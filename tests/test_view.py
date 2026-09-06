@@ -502,3 +502,40 @@ def test_thumbnail_helpers(view, monkeypatch):
     assert view.thumb_size() == 75
     assert view.MOUSE_DEFAULTS["shift_double"] == "thumbnail" and "thumbnail" in view.MOUSE_ACTIONS
     assert view.ACTIONS["thumbnail"] == "ctrl+m shift+Return"
+
+
+def test_output_settings(view, monkeypatch):
+    monkeypatch.setenv("SNIP_PIN_FILENAME", "shot_%H%M")
+    assert view.file_pattern() == "shot_%H%M"
+    monkeypatch.setenv("SNIP_PIN_FILENAME", "sub/dir_%H")
+    assert view.file_pattern() == "pin_%Y%m%d_%H%M%S"
+    for v, fmt in (("png", "png"), ("JPG", "jpeg"), (".jpeg", "jpeg"), ("webp", "webp"), ("gif", "png")):
+        monkeypatch.setenv("SNIP_PIN_FORMAT", v)
+        assert view.save_format() == fmt
+    monkeypatch.setenv("SNIP_PIN_QUALITY", "150")
+    assert view.save_quality() == 100
+    monkeypatch.setenv("SNIP_PIN_QUALITY", "x")
+    assert view.save_quality() == 90
+
+
+def test_write_image_png_and_jpeg(tmp_path, view):
+    from gi.repository import GdkPixbuf
+    src = tmp_path / "s.png"
+    make_png(str(src), 30, 20)
+    pb = GdkPixbuf.Pixbuf.new_from_file(str(src)).add_alpha(False, 0, 0, 0)
+    ops = [{"kind": "rect", "pts": [(2, 2), (20, 15)], "color": (1, 0, 0), "width": 2, "text": ""}]
+    view.write_image(pb, ops, str(tmp_path / "o.png"), "png")
+    assert png_size(str(tmp_path / "o.png")) == (30, 20)
+    view.write_image(pb, ops, str(tmp_path / "o.jpg"), "jpeg", 80)           # alpha flattened, no error
+    _, w, h = GdkPixbuf.Pixbuf.get_file_info(str(tmp_path / "o.jpg"))
+    assert (w, h) == (30, 20)
+    assert view.render_pixbuf(pb, []) is pb
+
+
+def test_last_extension_round_trip(tmp_path, view, monkeypatch):
+    monkeypatch.setattr(view, "STATE_DIR", str(tmp_path / "state"))
+    assert view.last_extension() == ".png"
+    view.remember_extension(".webp")
+    assert view.last_extension() == ".webp"
+    (tmp_path / "state" / "last-ext").write_text(".exe")
+    assert view.last_extension() == ".png"

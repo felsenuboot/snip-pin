@@ -25,6 +25,7 @@ layout) may still change.
 - `snip-pin.sh reopen` brings the last closed pin back where it was, with zoom, opacity and annotations (crop and rotation baked in); the last `reopen` = 5 closed pins are kept for the session, and it works after the viewer process has ended. `Shift+Esc` destroys a pin for good (#69).
 - `opacity` sets the starting opacity of every pin (`Ctrl+1` returns to it) and `alpha_bg` what shows behind transparent images: the desktop, a checkerboard or a colour (#72).
 - Thumbnail mode: `Ctrl+M` or `Shift` + double-click collapses a pin into a `thumb_size` (75 px) tile at its corner, a click brings it back; with a crop marquee drawn, `Shift+Enter` shows only that part as the tile (#66).
+- `Ctrl+Shift+S` opens a Save As dialog preset with the folder, the `filename` pattern and the last extension used; `.png`, `.jpg` or `.webp` picks the encoder and the pin stays open. Quick save, autosave and the `save` mode use the `filename` strftime pattern and the `format` / `quality` settings (#81).
 
 ## [0.3.0] – 2026-09-06
 
