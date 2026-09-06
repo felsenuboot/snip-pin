@@ -18,6 +18,7 @@ pointer, a magnifier with the pixel colour, and a key-hint panel.
 
   drag                 select freely           click            take the window / element under the pointer
   anchors / inside     resize / move           arrows           move by 1 px (Shift: 10, Ctrl: resize)
+  hover / grab an anchor, then arrows or W A S D move that corner or edge
   Enter / double-click confirm                 Esc / right-click abort
   Tab                  detection: both / windows / elements / off
   1 / 2 / wheel        parent / child element  W A S D          move the pointer by 1 px
@@ -61,7 +62,8 @@ ANCHOR_R = 5                       # handle radius in px
 GRAB = 8                           # how close to an edge / handle a press counts
 MAG_CELLS = 21                     # magnifier: pixels per side (odd, the centre is the pointer)
 HINTS = [("Enter", "confirm"), ("Esc", "abort"), ("drag / click", "select / take the window under the pointer"),
-         ("arrows", "move 1 px (Shift 10, Ctrl resize)"), ("Tab", "windows / elements / both / off"),
+         ("arrows", "move 1 px (Shift 10, Ctrl resize)"), ("anchor + arrows / WASD", "move that corner or edge"),
+         ("Tab", "windows / elements / both / off"),
          ("1 2 / wheel", "parent / child element"), ("Ctrl+A", "this monitor, again: everything"),
          ("R Shift+R", "previous capture areas"), ("W A S D", "move the pointer by 1 px"),
          ("C", "copy the colour"), ("Shift", "HEX / RGB"), ("F5", "refresh the frame")]
@@ -151,6 +153,29 @@ def resize_rect(rect, tag, px, py):
     return norm(x0, y0, x1, y1)
 
 
+def move_anchor(rect, tag, dx, dy):
+    """Move the edge(s) an anchor stands for by (dx, dy); a corner moves both, a midpoint one."""
+    x, y, w, h = rect
+    x0, y0, x1, y1 = x, y, x + w, y + h
+    if "w" in tag:
+        x0 += dx
+    if "e" in tag:
+        x1 += dx
+    if "n" in tag:
+        y0 += dy
+    if "s" in tag:
+        y1 += dy
+    return norm(x0, y0, x1, y1)
+
+
+def anchor_near(rect, px, py, grab=GRAB):
+    """The tag of the anchor within `grab` px of the point, or None."""
+    for tag, (ax, ay) in anchor_points(rect).items():
+        if abs(px - ax) <= grab and abs(py - ay) <= grab:
+            return tag
+    return None
+
+
 def pixel_at(pixbuf, x, y):
     """(r, g, b) 0..255 of a pixbuf pixel, or None outside."""
     if not (0 <= x < pixbuf.get_width() and 0 <= y < pixbuf.get_height()):
@@ -199,6 +224,7 @@ class Selector:
         self.pointer = None                            # global logical coordinates
         self.selection = parse_geom(data.get("select", "")) if data.get("select") else None
         self.press = None                              # (kind, x, y, rect at press, anchor tag)
+        self.active_anchor = None                      # hovered / grabbed anchor: arrows and WASD move it
         self.dragging = False
         self.depth = 0                                 # parent / child level among the candidates
         self.area_idx = -1
@@ -235,6 +261,10 @@ class Selector:
 
     def set_pointer(self, x, y):
         self.pointer = (x, y)
+        if self.selection and self.press is None:
+            tag = anchor_near(self.selection, x, y)
+            if tag is not None:
+                self.active_anchor = tag                # sticky: keys keep moving it after the pointer leaves
         self.redraw()
 
     def finish(self, rect):
@@ -257,6 +287,10 @@ class Selector:
         if not self.selection:
             return
         x, y, w, h = self.selection
+        if self.active_anchor is not None:
+            self.selection = clamp_rect(move_anchor(self.selection, self.active_anchor, dx, dy), self.bounds)
+            self.redraw()
+            return
         if resize:
             self.selection = clamp_rect((x, y, max(1, w + dx), max(1, h + dy)), self.bounds)
         else:
@@ -349,7 +383,12 @@ class Selector:
             dy = {"Up": -step, "Down": step}.get(name, 0)
             self.nudge(dx, dy, resize=bool(ctrl))
         elif lower in (Gdk.KEY_w, Gdk.KEY_a, Gdk.KEY_s, Gdk.KEY_d) and not ctrl:
-            self.move_pointer({Gdk.KEY_a: -1, Gdk.KEY_d: 1}.get(lower, 0), {Gdk.KEY_w: -1, Gdk.KEY_s: 1}.get(lower, 0))
+            dx, dy = {Gdk.KEY_a: -1, Gdk.KEY_d: 1}.get(lower, 0), {Gdk.KEY_w: -1, Gdk.KEY_s: 1}.get(lower, 0)
+            step = 10 if shift else 1
+            if self.selection and self.active_anchor is not None:
+                self.nudge(dx * step, dy * step)        # W A S D move the active anchor, like the arrows
+            else:
+                self.move_pointer(dx, dy)
         else:
             return False
         return True
@@ -443,13 +482,12 @@ class Overlay(Gtk.Window):
         sel = self.sel.selection
         kind, tag = "new", None
         if sel:
-            for t, (ax, ay) in anchor_points(sel).items():
-                if abs(gx - ax) <= GRAB and abs(gy - ay) <= GRAB:
-                    kind, tag = "resize", t
-                    break
-            else:
-                if contains(sel, gx, gy):
-                    kind = "move"
+            tag = anchor_near(sel, gx, gy)
+            if tag is not None:
+                kind = "resize"
+            elif contains(sel, gx, gy):
+                kind = "move"
+        self.sel.active_anchor = tag                    # a grabbed anchor stays active; elsewhere clears it
         self.sel.press = (kind, gx, gy, sel, tag)
         self.sel.dragging = False
 
@@ -527,9 +565,10 @@ class Overlay(Gtk.Window):
             cr.stroke()
             cr.set_dash([])
             if sel.selection:
-                for ax, ay in anchor_points(shown).values():
-                    cr.arc(self.lx(ax), self.ly(ay), ANCHOR_R, 0, 2 * math.pi)
-                    cr.set_source_rgba(0.2, 0.55, 0.95, 1)
+                for tag, (ax, ay) in anchor_points(shown).items():
+                    active = tag == sel.active_anchor
+                    cr.arc(self.lx(ax), self.ly(ay), ANCHOR_R + (2 if active else 0), 0, 2 * math.pi)
+                    cr.set_source_rgba(*(sel.border[:3] if active else (0.2, 0.55, 0.95)), 1)
                     cr.fill_preserve()
                     cr.set_source_rgba(1, 1, 1, 1)
                     cr.set_line_width(1.5)

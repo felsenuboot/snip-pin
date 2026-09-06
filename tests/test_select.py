@@ -48,3 +48,13 @@ def test_pixel_at(select, tmp_path):
     pb.fill(0x10203000)
     assert select.pixel_at(pb, 0, 0) == (0x10, 0x20, 0x30)
     assert select.pixel_at(pb, 4, 0) is None and select.pixel_at(pb, 0, -1) is None
+
+
+def test_move_anchor_and_anchor_near(select):
+    r = (10, 20, 100, 50)
+    assert select.move_anchor(r, "se", 5, -3) == (10, 20, 105, 47)
+    assert select.move_anchor(r, "nw", -2, -2) == (8, 18, 102, 52)
+    assert select.move_anchor(r, "n", 99, 5) == (10, 25, 100, 45)             # a midpoint ignores the other axis
+    assert select.move_anchor(r, "e", -200, 0) == (0, 20, 10, 50)             # dragged past the far edge: flips
+    assert select.anchor_near(r, 110, 70) == "se" and select.anchor_near(r, 60, 20) == "n"
+    assert select.anchor_near(r, 60, 45) is None
