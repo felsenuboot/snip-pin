@@ -174,7 +174,34 @@ def render_text_png(text, out_path, font="Sans 11", max_width=900, margin=15, fg
     return w, h
 
 
+def crop_frame(frame_path, origin, geom, out_path):
+    """Cut WxH+X+Y (screen coordinates) out of a frame whose (0, 0) is `origin` and write it as PNG.
+    Returns the size written; raises GLib.Error / ValueError on bad input."""
+    import gi
+    gi.require_version("GdkPixbuf", "2.0")
+    from gi.repository import GdkPixbuf
+    wh, x, y = geom.split("+")
+    w, h = (int(v) for v in wh.split("x"))
+    x, y = int(x) - origin[0], int(y) - origin[1]
+    pb = GdkPixbuf.Pixbuf.new_from_file(frame_path)
+    x0, y0 = max(0, x), max(0, y)
+    x1, y1 = min(pb.get_width(), x + w), min(pb.get_height(), y + h)
+    if x1 - x0 < 1 or y1 - y0 < 1:
+        raise ValueError("the region lies outside the frame")
+    pb.new_subpixbuf(x0, y0, x1 - x0, y1 - y0).savev(out_path, "png", [], [])
+    return x1 - x0, y1 - y0
+
+
 if __name__ == "__main__" and len(sys.argv) >= 2:
+    if sys.argv[1] == "--crop":
+        # pin-view.py --crop FRAME OX OY WxH+X+Y OUT: the capture comes from the frozen
+        # frame, so it shows exactly what the selection showed (no overlay in the shot)
+        try:
+            crop_frame(sys.argv[2], (int(sys.argv[3]), int(sys.argv[4])), sys.argv[5], sys.argv[6])
+        except Exception as e:  # noqa: BLE001 - any failure means "grab the screen instead"
+            print(f"pin-view: crop: {e}", file=sys.stderr)
+            sys.exit(1)
+        sys.exit(0)
     if sys.argv[1] == "--render-text":
         # pin-view.py --render-text IN OUT [FONT WIDTH MARGIN FG BG]: used by snip-pin.sh clipboard
         a = sys.argv[2:] + [""] * 7

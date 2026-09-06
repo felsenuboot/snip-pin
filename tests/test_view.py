@@ -788,3 +788,16 @@ def test_render_tilted_png(tmp_path, view):
     assert (w, h) == (int(-(-bw // 1)), int(-(-bh // 1)))
     for k in ("tilt_cw", "tilt_ccw", "tilt_cw_5", "tilt_ccw_5"):
         assert k in view.ACTIONS
+
+
+def test_crop_frame(tmp_path, view):
+    from gi.repository import GdkPixbuf
+    src = tmp_path / "frame.png"
+    make_png(str(src), 100, 60)
+    assert view.crop_frame(str(src), (0, 0), "20x10+30+5", str(tmp_path / "o.png")) == (20, 10)
+    assert png_size(str(tmp_path / "o.png")) == (20, 10)
+    assert view.crop_frame(str(src), (1000, 0), "50x50+1080+40", str(tmp_path / "o2.png")) == (20, 20)   # clamped
+    import pytest
+    with pytest.raises(ValueError):
+        view.crop_frame(str(src), (0, 0), "10x10+500+500", str(tmp_path / "o3.png"))
+    GdkPixbuf.Pixbuf.new_from_file(str(tmp_path / "o2.png"))

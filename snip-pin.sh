@@ -455,7 +455,7 @@ else
     elems='' frame='' pid_detect='' pid_freeze='' lua_cfg=''
     cleanup() {
         [[ -n "$pid_freeze" ]] && kill "$pid_freeze" 2>/dev/null
-        rm -f "$elems" "$frame" "$STATE/selecting" "$STATE/abort" "$STATE/slurp"
+        rm -f "$elems" "$STATE/selecting" "$STATE/abort" "$STATE/slurp"    # the frame is kept for the capture
         if [[ -n "$lua_cfg" ]]; then
             hyprctl eval 'hl.unbind("mouse:274")' >/dev/null 2>&1
         else
@@ -551,8 +551,9 @@ else
     fi
     cleanup
     trap - EXIT
-    [[ $rc -ne 0 || -z "$geom" ]] && exit 0
+    [[ $rc -ne 0 || -z "$geom" ]] && { rm -f "$frame"; exit 0; }
 fi
+frame="${frame:-}"
 
 IFS='x+' read -r W H X Y <<< "$geom"
 [[ "$W" -lt 1 || "$H" -lt 1 ]] && exit 0
@@ -565,10 +566,28 @@ if [[ "$AREAS" -gt 0 ]]; then
 fi
 
 file="$CACHE/$(date +%Y%m%d_%H%M%S_%N)_x${X}_y${Y}.png"
-grim_opts=(-l 1)
-[[ "$CURSOR" -ne 0 ]] && grim_opts+=(-c)
-grim -g "${X},${Y} ${W}x${H}" "${grim_opts[@]}" "$file" || { log "grim failed"; exit 1; }
-log "captured $file"
+# The capture comes from the frozen frame when there is one (what the selection
+# showed, nothing of the overlay in it) unless the cursor is wanted or the
+# region's output is scaled (the frame is at scale 1); grim grabs the live screen otherwise.
+captured=''
+scale_ok=$(hyprctl monitors -j 2>/dev/null | jq -r --argjson x "$X" --argjson y "$Y" '
+    [.[] | select(.x <= $x and $x < .x + .width / .scale and .y <= $y and $y < .y + .height / .scale)]
+    | if length == 0 then "true" else (all(.[]; .scale == 1) | tostring) end')
+if [[ -n "$frame" && -s "$frame" && "$CURSOR" -eq 0 && "$scale_ok" == true ]]; then
+    read -r ox oy < <(hyprctl monitors -j | jq -r '"\([.[].x] | min) \([.[].y] | min)"')
+    if "$HERE/pin-view.py" --crop "$frame" "${ox:-0}" "${oy:-0}" "$geom" "$file" 2>/dev/null; then
+        captured=frame
+    fi
+fi
+if [[ -z "$captured" ]]; then
+    grim_opts=(-l 1)
+    [[ "$CURSOR" -ne 0 ]] && grim_opts+=(-c)
+    [[ -n "$frame" ]] && sleep 0.05                         # let the overlay unmap before the grab
+    grim -g "${X},${Y} ${W}x${H}" "${grim_opts[@]}" "$file" || { log "grim failed"; rm -f "$frame"; exit 1; }
+    captured=grim
+fi
+rm -f "$frame"
+log "captured $file from $captured"
 # autosave_dir: every capture also lands there, whatever happens to the pin
 if [[ -n "${SNIP_PIN_AUTOSAVE_DIR:-}" ]]; then
     autosave=$(SNIP_PIN_SAVE_DIR=$SNIP_PIN_AUTOSAVE_DIR save_dir)
