@@ -115,8 +115,10 @@ def fake_tools(tmp_path, geom="400x300+600+400", slurp_rc=0):
         p = b / name
         p.write_text(f'#!/bin/sh\necho "{name} $*" >> "{log}"\n{body}\n')
         p.chmod(0o755)
-    monitors = ('[{"activeWorkspace":{"id":1},"specialWorkspace":{"id":0}},'
-                ' {"activeWorkspace":{"id":5},"specialWorkspace":{"id":-98}}]')
+    monitors = ('[{"activeWorkspace":{"id":1},"specialWorkspace":{"id":0},'
+                '  "x":0,"y":0,"width":3440,"height":1440,"scale":1,"transform":0},'
+                ' {"activeWorkspace":{"id":5},"specialWorkspace":{"id":-98},'
+                '  "x":3440,"y":0,"width":3840,"height":2160,"scale":2,"transform":1}]')
     clients = ('[{"workspace":{"id":1},"mapped":true,"hidden":false,"at":[10,20],"size":[300,200]},'
                ' {"workspace":{"id":5},"mapped":true,"hidden":false,"at":[3440,0],"size":[1920,1080]},'
                ' {"workspace":{"id":-98},"mapped":true,"hidden":false,"at":[500,500],"size":[100,100]},'
@@ -124,7 +126,7 @@ def fake_tools(tmp_path, geom="400x300+600+400", slurp_rc=0):
                ' {"workspace":{"id":1},"mapped":false,"hidden":false,"at":[1,1],"size":[2,2]},'
                ' {"workspace":{"id":1},"mapped":true,"hidden":true,"at":[3,3],"size":[4,4]}]')
     stub("hyprctl", f'case "$1" in monitors) echo \'{monitors}\';; clients) echo \'{clients}\';; '
-                    'keyword) echo "ok";; *) echo ok;; esac')
+                    'cursorpos) echo \'{"x": 3500, "y": 100}\';; keyword) echo "ok";; *) echo ok;; esac')
     stub("slurp", f'cat > "{tmp_path}/slurp.in"; printf "%s" "{geom}"; exit {slurp_rc}')
     stub("grim", 'for a; do f=$a; done; printf "png" > "$f"')
     stub("wl-copy", "cat >/dev/null")
@@ -360,3 +362,22 @@ def test_cursor_setting_adds_grim_flag(tmp_path):
     env["SNIP_PIN_CURSOR"] = "0"
     assert run([], env).returncode == 0
     assert " -c " not in log.read_text().splitlines()[-2]              # the second grim line
+
+
+def test_screen_captures_the_monitor_under_the_pointer(tmp_path):
+    viewer_log = tmp_path / "viewer.log"
+    env = make_env(tmp_path, viewer_log)
+    b, log = fake_tools(tmp_path)
+    env["PATH"] = f"{b}:{env['PATH']}"
+    assert run(["screen"], env).returncode == 0
+    # the pointer (3500, 100) is on the second monitor: 3840x2160 at scale 2, rotated -> 1080x1920 logical
+    assert "grim -g 3440,0 1080x1920" in log.read_text() and "slurp" not in log.read_text()
+    assert wait_for(viewer_log)[1:] == ["3440", "0"]
+
+
+def test_screen_all_is_the_bounding_box(tmp_path):
+    env = make_env(tmp_path, tmp_path / "viewer.log")
+    b, log = fake_tools(tmp_path)
+    env["PATH"] = f"{b}:{env['PATH']}"
+    assert run(["screen", "all"], env).returncode == 0
+    assert "grim -g 0,0 4520x1920" in log.read_text()

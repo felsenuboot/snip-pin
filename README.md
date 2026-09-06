@@ -146,6 +146,7 @@ opened from the picker appear centred.
 | `snip-pin.sh last` | pin the newest snip again, where it was taken |
 | `snip-pin.sh history` | open a thumbnail grid of all cached snips, newest first |
 | `snip-pin.sh clipboard` | pin the image in the clipboard (PNG, JPEG, WebP, … or a copied image file), centred on the screen |
+| `snip-pin.sh screen` | capture the monitor under the pointer without a selection and pin it; `screen all` captures every monitor as one image |
 | `snip-pin.sh clear` | delete every snip that is not kept |
 | `snip-pin.sh doctor` | check the dependencies and print versions |
 

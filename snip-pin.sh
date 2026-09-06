@@ -15,6 +15,8 @@
 #   snip-pin.sh history    thumbnail picker for cached snips
 #   snip-pin.sh clipboard  pin the image in the clipboard
 #   snip-pin.sh pin FILE   pin an image file, centred (used by the history picker)
+#   snip-pin.sh screen     capture the monitor under the pointer, no selection
+#   snip-pin.sh screen all capture every monitor as one image
 #   snip-pin.sh clear      empty the history (kept snips stay)
 #   snip-pin.sh abort      end the selection this script started (right-click bind)
 #   snip-pin.sh doctor     check the dependencies (exit 1 if a required one is missing)
@@ -156,6 +158,23 @@ PY
         fi
         pin_file "$file"
         exit 0 ;;
+    screen)
+        # The monitor under the pointer (logical size: scale and rotation
+        # applied), or the bounding box of every monitor for `screen all`.
+        # The capture then runs below exactly like a selected region.
+        read -r cx cy < <(hyprctl cursorpos -j 2>/dev/null | jq -r '"\(.x) \(.y)"' 2>/dev/null)
+        [[ "${cx:-}" =~ ^-?[0-9]+$ ]] || { cx=0; cy=0; }
+        SNIP_GEOM=$(hyprctl monitors -j | jq -r --argjson cx "$cx" --argjson cy "$cy" --arg all "${2:-}" '
+            map({x, y, w: (if (.transform % 2) == 1 then .height / .scale else .width / .scale end),
+                        h: (if (.transform % 2) == 1 then .width / .scale else .height / .scale end)})
+            | if $all == "all" then
+                {x: (map(.x) | min), y: (map(.y) | min), r: (map(.x + .w) | max), b: (map(.y + .h) | max)}
+                | "\(.r - .x | floor)x\(.b - .y | floor)+\(.x)+\(.y)"
+              else
+                ((map(select(.x <= $cx and $cx < .x + .w and .y <= $cy and $cy < .y + .h)) | first) // first)
+                | "\(.w | floor)x\(.h | floor)+\(.x)+\(.y)"
+              end')
+        [[ "$SNIP_GEOM" =~ ^[0-9]+x[0-9]+\+-?[0-9]+\+-?[0-9]+$ ]] || { notify "No monitor found"; exit 1; } ;;
     "")
         # Double tap: if another instance started a selection less than TAP_MS
         # ago, tell it to abort (flag file, and end slurp if it is already up)
@@ -236,7 +255,7 @@ PY
         exit 0 ;;
     --version|-V)
         cat "$HERE/VERSION"; exit 0 ;;
-    *)  echo "usage: snip-pin.sh [last|history|clipboard|pin FILE|clear|doctor|config|--version]" >&2
+    *)  echo "usage: snip-pin.sh [last|history|clipboard|pin FILE|screen [all]|clear|doctor|config|--version]" >&2
         echo "  (no argument: select a region, capture it, pin it)" >&2; exit 2 ;;
 esac
 
