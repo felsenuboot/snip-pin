@@ -34,8 +34,8 @@ GTK 4 viewer; no daemon, no portal.
   snaps to one, a drag selects freely. Element detection is pure numpy on the
   frozen frame, about 40 ms.
 - ✏️ **Annotate on the pin.** Rectangle, ellipse, arrow, pen, text (input
-  methods and Compose work), numbered steps, marker, blur and crop, with undo
-  and redo. Annotations are baked into what you copy or save; the file on
+  methods and Compose work), numbered steps, marker, blur, crop, rotate and
+  flip, with undo and redo. Annotations are baked into what you copy or save; the file on
   disk stays untouched.
 - 📋 **Clipboard first.** Every snip lands in the clipboard as well; `Ctrl+C`,
   a double-click or a right-click on a pin copies it again, annotations
@@ -136,8 +136,10 @@ accepted.
 | Action | Input |
 |---|---|
 | Move | drag with the left mouse button |
-| Zoom | mouse wheel or touchpad (10 % steps, the percentage shows briefly), `Ctrl+0` resets |
+| Zoom | mouse wheel or touchpad (10 % steps, the percentage shows briefly) |
 | Opacity | `Ctrl` + wheel, `Ctrl+1` resets |
+| Rotate, flip | `Ctrl+R` / `Ctrl+Shift+R` a quarter turn, `Ctrl+H` / `Ctrl+J` flip; annotations turn with the image, undoable |
+| Reset image | `Ctrl+0`: zoom, opacity, rotation and flips back to normal |
 | Copy image and close | `Ctrl+C`, double-click or right-click |
 | Save to the screenshot folder and close | `Ctrl+S` or the middle-click menu |
 | Close without copying | `Esc` |

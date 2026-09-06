@@ -400,3 +400,31 @@ def test_commands_without_a_viewer_exit_quietly(view):
     assert r.returncode == 0 and r.stdout == "" and r.stderr == ""
     assert "--toggle" in view.COMMANDS and "--close-all" in view.COMMANDS and "--click-through" in view.COMMANDS
     assert view.ACTIONS["click_through"] == "ctrl+t"
+
+
+def test_transform_ops_rotates_and_flips_points(view):
+    ops = [{"kind": "arrow", "pts": [(10, 20), (30, 40)], "_mosaic": "x"},
+           {"kind": "crop", "pts": []}]
+    view.transform_ops(ops, "rotate", 1, 100, 50)            # 90 deg clockwise: (x, y) -> (ih - y, x)
+    assert ops[0]["pts"] == [(30, 10), (10, 30)] and "_mosaic" not in ops[0]
+    view.transform_ops(ops, "rotate", 3, 50, 100)            # and back
+    assert ops[0]["pts"] == [(10, 20), (30, 40)]
+    view.transform_ops(ops, "flip", "h", 100, 50)
+    assert ops[0]["pts"] == [(90, 20), (70, 40)]
+    view.transform_ops(ops, "flip", "v", 100, 50)
+    assert ops[0]["pts"] == [(90, 30), (70, 10)]
+    view.transform_ops(ops, "rotate", 2, 100, 50)
+    assert ops[0]["pts"] == [(10, 20), (30, 40)]
+    assert ops[1]["pts"] == []                                # markers untouched
+
+
+def test_render_skips_transform_markers(tmp_path, view):
+    from gi.repository import GdkPixbuf
+    src = tmp_path / "s.png"
+    make_png(str(src), 40, 20)
+    pb = GdkPixbuf.Pixbuf.new_from_file(str(src))
+    ops = [{"kind": "rotate", "pts": [], "color": (0, 0, 0), "width": 2, "text": "", "arg": 1},
+           {"kind": "flip", "pts": [], "color": (0, 0, 0), "width": 2, "text": "", "arg": "h"}]
+    view.render_png(pb.rotate_simple(GdkPixbuf.PixbufRotation.CLOCKWISE), ops, str(tmp_path / "o.png"))
+    assert png_size(str(tmp_path / "o.png")) == (20, 40)
+    assert view.ACTIONS["reset"] == "ctrl+0" and "reset" in view.MOUSE_ACTIONS
