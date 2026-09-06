@@ -801,3 +801,8 @@ def test_crop_frame(tmp_path, view):
     with pytest.raises(ValueError):
         view.crop_frame(str(src), (0, 0), "10x10+500+500", str(tmp_path / "o3.png"))
     GdkPixbuf.Pixbuf.new_from_file(str(tmp_path / "o2.png"))
+
+
+def test_point_rect_sets_the_fields(view):
+    r = view.point_rect(50.7, 60.2)
+    assert (r.x, r.y, r.width, r.height) == (50, 60, 1, 1)
