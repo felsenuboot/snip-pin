@@ -13,7 +13,7 @@ usage: pin-view.py IMAGE [X Y]
   Ctrl+Shift+C   copy the text in the pin (tesseract); with a crop marquee, only that part
   dbl-click      copy image & close        Esc       close (snip-pin.sh reopen brings it back)
   Shift+Esc      destroy: close for good
-  right-click    copy image & close        middle-click  menu
+  right-click    menu                      middle-click  menu
 
 Annotations (toolbar under the pin while the pointer hovers it, or keys):
   R rectangle   E ellipse   A arrow   P pen   T text   M marker   B blur (mosaic)
@@ -569,7 +569,7 @@ ACTIONS.update({f"command_{i}": f"ctrl+shift+{i}" for i in range(1, 10)})
 ACTIONS["open_with"] = ""
 ACTIONS.update({f"color_{i}": str(i) for i in range(1, 10)})
 # what the mouse does; [mouse] in the config file overrides ("right = menu")
-MOUSE_DEFAULTS = {"right": "copy", "double": "copy", "shift_double": "thumbnail", "middle": "menu"}
+MOUSE_DEFAULTS = {"right": "menu", "double": "copy", "shift_double": "thumbnail", "middle": "menu"}
 MOUSE_ACTIONS = ("copy", "save", "save_as", "print", "ocr", "open_with", "close", "destroy", "menu", "reset",
                  "reset_zoom",
                  "thumbnail", "none", *[f"command_{i}" for i in range(1, 10)])

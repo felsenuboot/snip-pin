@@ -42,9 +42,9 @@ GTK 4 viewer; no daemon, no portal.
   flip, with undo and redo; an eraser, and every annotation can be moved,
   recoloured or removed afterwards. Annotations are baked into what you copy or save; the file on
   disk stays untouched.
-- 📋 **Clipboard first.** Every snip lands in the clipboard as well; `Ctrl+C`,
-  a double-click or a right-click on a pin copies it again, annotations
-  included, as pixels and as a file, and closes it. Copy-only and save-only modes for keys of their own.
+- 📋 **Clipboard first.** Every snip lands in the clipboard as well; `Ctrl+C`
+  or a double-click on a pin copies it again, annotations included, as pixels
+  and as a file, and closes it. Copy-only and save-only modes for keys of their own.
 - 🕘 **History.** Snips are kept for a week, or for good if you star them: pin
   the last one again, pick one from a thumbnail grid, repeat the last capture
   area, or pin the image that is in the clipboard; copied text is rendered
@@ -170,7 +170,8 @@ the keys:
 | Thumbnail | `Ctrl+M` or `Shift` + double-click collapses the pin into a 75 px tile at its corner; a click restores it. With the crop tool's marquee drawn, `Shift+Enter` keeps only that part visible as the tile |
 | Tilt | `Alt` + wheel turns by 1° (`Shift` too: 5°), `Alt` + drag turns the pin around its centre following the pointer, `Ctrl+,` / `Ctrl+.` step by 1°; angles near a right angle snap to it. Copy and save give the tilted image on a transparent background (`rotate_export = original` for the upright pixels) |
 | Reset image | `Ctrl+0`: zoom, opacity, rotation, tilt, flips and thumbnail back to normal |
-| Copy image and close | `Ctrl+C`, double-click or right-click |
+| Copy image and close | `Ctrl+C` or double-click |
+| Menu | right-click or middle-click (`right = copy` in the config restores the old copy-and-close) |
 | Save to the screenshot folder and close | `Ctrl+S` or the middle-click menu; name from the `filename` pattern, `format` png, jpg or webp |
 | Save as… | `Ctrl+Shift+S`: a file dialog preset with the folder, the pattern and the last extension you used; `.png`, `.jpg` or `.webp` picks the encoder. The pin stays open |
 | Send to a program | *Open with…* in the menu asks which application; `[commands]` in the config adds your own entries (`Open in GIMP = gimp %f`, an upload script, …) under *Send to*, the first nine on `Ctrl+Shift+1` … `9` |
@@ -239,7 +240,7 @@ opened from the picker appear centred.
 Pressing the snip key twice quickly also opens the history: the second press
 aborts the selection the first one started. In the picker, click or use the
 arrow keys, `WASD` or `HJKL` to select a snip; double-click or `Enter` pins
-it, right-click copies it to the clipboard, `F` keeps or unkeeps it, `Delete`
+it, right-click opens a menu (pin, copy, keep, delete), `F` keeps or unkeeps it, `Delete`
 removes it, `Esc` closes. The "Clear history" button
 asks once, then deletes everything that is not kept.
 
@@ -306,8 +307,8 @@ and `%F` the original file; the first nine entries get `Ctrl+Shift+1` … `9`.
 A failing command shows its last error line as a toast.
 
 Keys and mouse buttons on a pin are rebindable in the `[keys]` and `[mouse]`
-sections: `copy = ctrl+shift+c`, `redo = ctrl+y`, `right = menu` (Snipaste
-style: right-click opens the menu, `double = close`). Modifiers are `ctrl`,
+sections: `copy = ctrl+shift+c`, `redo = ctrl+y`, `right = copy` (the old
+right-click copies and closes; the default opens the menu, as in Snipaste). Modifiers are `ctrl`,
 `shift`, `alt`, `super`; several bindings are separated by spaces; an empty
 value unbinds. Colours stay on the digits.
 

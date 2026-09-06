@@ -5,7 +5,7 @@ usage: pin-history.py CACHE_DIR SNIP_PIN_SH
 
   click / arrows / WASD / HJKL   select a snip
   double-click / Enter   pin it again, centred on the screen
-  right-click     copy the snip to the clipboard and close
+  right-click     menu: pin, copy, keep, delete
   F or *          keep / unkeep: kept snips never expire
   Delete          remove it from the cache
   Esc             close (right-click on empty space closes too)
@@ -144,7 +144,7 @@ class History(Gtk.ApplicationWindow):
         scroller = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER, vexpand=True)
         scroller.set_child(self.flow)
         bar = Gtk.ActionBar()
-        hint = Gtk.Label(label=_("double-click / Enter pin  ·  right-click copy  ·  F keep  ·  Del remove"
+        hint = Gtk.Label(label=_("double-click / Enter pin  ·  right-click menu  ·  F keep  ·  Del remove"
                                  "  ·  arrows / WASD / HJKL move"))
         hint.add_css_class("snip-hint")
         bar.pack_start(hint)
@@ -168,6 +168,10 @@ class History(Gtk.ApplicationWindow):
         rclose = Gtk.GestureClick(button=3)
         rclose.connect("pressed", lambda *a: self.close())
         self.add_controller(rclose)
+        for name in ("pin", "copy", "keep", "delete"):
+            act = Gio.SimpleAction.new(name, None)
+            act.connect("activate", lambda *a, name=name: self.menu_action(name))
+            self.add_action(act)
 
         files = snips(cache)
         self.empty.set_visible(not files)
@@ -267,10 +271,38 @@ class History(Gtk.ApplicationWindow):
         self.close()
 
     def on_rclick(self, gesture, n, x, y):
+        """Right-click on a thumbnail: a menu with pin, copy, keep and delete."""
         child = self.flow.get_child_at_pos(int(x), int(y))
-        if child is not None:
-            gesture.set_state(Gtk.EventSequenceState.CLAIMED)
+        if child is None:
+            return
+        gesture.set_state(Gtk.EventSequenceState.CLAIMED)
+        self.flow.select_child(child)
+        child.grab_focus()
+        menu = Gio.Menu()
+        menu.append(_("Pin") + "\tEnter", "win.pin")
+        menu.append(_("Copy to clipboard"), "win.copy")
+        menu.append((_("Unkeep") if is_kept(child.path) else _("Keep (never expires)")) + "\tF", "win.keep")
+        menu.append(_("Delete") + "\tDel", "win.delete")
+        if getattr(self, "popover", None) is not None:
+            self.popover.unparent()
+        self.popover = Gtk.PopoverMenu.new_from_model(menu)
+        self.popover.set_parent(self.flow)
+        self.popover.set_has_arrow(False)
+        self.popover.set_pointing_to(Gdk.Rectangle(x=int(x), y=int(y), width=1, height=1))
+        self.popover.popup()
+
+    def menu_action(self, name):
+        child = self.selected()
+        if child is None:
+            return
+        if name == "pin":
+            self.pin(child.path)
+        elif name == "copy":
             self.copy(child.path)
+        elif name == "keep":
+            self.toggle_keep(child)
+        elif name == "delete":
+            self.remove(child)
 
     def remove(self, child):
         for p in (child.path, thumb_path(self.cache, child.path)):

@@ -366,7 +366,7 @@ def test_default_keymap_has_no_conflicts_and_overrides_apply(view, capsys):
 
 
 def test_mouse_map_defaults_and_overrides(view, capsys):
-    assert view.build_mouse({}) == {"right": "copy", "double": "copy", "shift_double": "thumbnail", "middle": "menu"}
+    assert view.build_mouse({}) == {"right": "menu", "double": "copy", "shift_double": "thumbnail", "middle": "menu"}
     m = view.build_mouse({"right": "menu", "double": "close", "middle": "bogus", "left": "copy"})
     assert m == {"right": "menu", "double": "close", "shift_double": "thumbnail", "middle": "menu"}
     assert "bogus" in capsys.readouterr().err

@@ -212,8 +212,8 @@ msgstr "Snip-Verlauf"
 msgid "No snips in the last days."
 msgstr "Keine Snips in den letzten Tagen."
 
-msgid "double-click / Enter pin  ·  right-click copy  ·  F keep  ·  Del remove  ·  arrows / WASD / HJKL move"
-msgstr "Doppelklick / Enter anpinnen  ·  Rechtsklick kopieren  ·  F behalten  ·  Entf löschen  ·  Pfeile / WASD / HJKL bewegen"
+msgid "double-click / Enter pin  ·  right-click menu  ·  F keep  ·  Del remove  ·  arrows / WASD / HJKL move"
+msgstr "Doppelklick / Enter anpinnen  ·  Rechtsklick Menü  ·  F behalten  ·  Entf löschen  ·  Pfeile / WASD / HJKL bewegen"
 
 msgid "Clear history"
 msgstr "Verlauf leeren"
@@ -234,3 +234,18 @@ msgstr "1° nach links neigen"
 
 msgid "upright"
 msgstr "gerade"
+
+msgid "Pin"
+msgstr "Anpinnen"
+
+msgid "Copy to clipboard"
+msgstr "In die Zwischenablage kopieren"
+
+msgid "Unkeep"
+msgstr "Nicht mehr behalten"
+
+msgid "Keep (never expires)"
+msgstr "Behalten (verfällt nie)"
+
+msgid "Delete"
+msgstr "Löschen"
