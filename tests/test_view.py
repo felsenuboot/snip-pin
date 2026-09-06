@@ -695,3 +695,19 @@ def test_ocr_helpers(view):
     assert view.ocr_scale(100, 40) == 3 and view.ocr_scale(800, 300) == 2 and view.ocr_scale(1200, 700) == 1
     assert view.clean_ocr("\n\n hello  \nworld \n\n\x0c") == " hello\nworld"
     assert view.ACTIONS["ocr"] == "ctrl+shift+c" and "ocr" in view.MOUSE_ACTIONS
+
+
+def test_log_writes_only_when_debug_is_on(tmp_path, view, monkeypatch):
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    monkeypatch.setenv("SNIP_PIN_DEBUG", "0")
+    view.log("quiet")
+    assert not os.path.exists(view.log_path())
+    monkeypatch.setenv("SNIP_PIN_DEBUG", "1")
+    view.log("hello")
+    view.warn("careful")
+    text = open(view.log_path()).read()
+    assert "view[" in text and " hello" in text and "WARN careful" in text
+    big = tmp_path / "snip-pin" / "log"
+    big.write_bytes(b"x" * (view.LOG_MAX + 1))
+    view.rotate_log(str(big))
+    assert not big.exists() and (tmp_path / "snip-pin" / "log.1").exists()

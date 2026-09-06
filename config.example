@@ -24,6 +24,7 @@ text_fg = #000000
 text_bg = #ffffff
 ocr_lang = eng                # tesseract language(s) for Copy text, e.g. eng+deu (tesseract --list-langs)
 #ocr_cmd =                    # another recogniser: a command reading the PNG %f and printing text
+debug = 0                     # 1 writes timestamped lines to ~/.local/state/snip-pin/log (`snip-pin.sh log`)
 elements_budget_ms = 150      # time the element detector may spend joining edges
 
 # the selection (slurp): outline colour and width, the dim over the rest of the

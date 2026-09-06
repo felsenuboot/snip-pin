@@ -28,6 +28,7 @@
 #   snip-pin.sh abort      end the selection this script started (right-click bind)
 #   snip-pin.sh doctor     check the dependencies (exit 1 if a required one is missing)
 #   snip-pin.sh config     print the effective settings and where each comes from
+#   snip-pin.sh log [-f]   show the debug log (debug = 1 in the config), -f follows it
 #   snip-pin.sh --version  print the version
 # Pressing the snip key twice within tap_ms (default 300) aborts the
 # selection the first press started and opens the history instead.
@@ -102,6 +103,16 @@ mkdir -p "$CACHE/kept" "$STATE"
 find "$CACHE" -maxdepth 2 -name '*_annotated.png' -delete 2>/dev/null
 
 notify() { command -v notify-send >/dev/null && notify-send -i camera-photo-symbolic -t 2000 "Snip" "$1"; }
+# debug = 1: timestamped lines in $XDG_STATE_HOME/snip-pin/log (shared with the viewer)
+LOG="${XDG_STATE_HOME:-$HOME/.local/state}/snip-pin/log"
+case "${SNIP_PIN_DEBUG:-0},," in 0*|no*|false*|off*|",,") DEBUG=0 ;; *) DEBUG=1 ;; esac
+log() {
+    [[ "$DEBUG" -eq 1 ]] || return 0
+    mkdir -p "${LOG%/*}" 2>/dev/null
+    [[ -f "$LOG" && $(stat -c %s "$LOG" 2>/dev/null || echo 0) -gt 1000000 ]] && mv -f "$LOG" "$LOG.1"
+    printf '%s sh[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S.%3N')" "$$" "$*" >> "$LOG"
+}
+log "snip-pin.sh ${*:-snip}"
 # `sound = default` plays the theme's screen-capture event, a path plays that file (copy / save without a pin)
 play_sound() {
     local v="${SNIP_PIN_SOUND:-}"
@@ -334,6 +345,7 @@ PY
         else
             echo "hyprland:    not running (or hyprctl missing)"
         fi
+        if [[ -f "$LOG" ]]; then echo "log:         $LOG ($(stat -c %s "$LOG") bytes)"; else echo "log:         $LOG (none; debug = 1 turns it on)"; fi
         [[ $missing -eq 0 ]] && echo "all required tools found" || echo "required tools missing" >&2
         exit $missing ;;
     config)
@@ -385,10 +397,15 @@ PY
         show text_bg '#ffffff'
         show ocr_lang eng
         show ocr_cmd ''
+        show debug 0
+        exit 0 ;;
+    log)
+        [[ -f "$LOG" ]] || { echo "no log at $LOG (set debug = 1 in the config)"; exit 0; }
+        if [[ "${2:-}" == -f ]]; then exec tail -n 30 -f "$LOG"; else tail -n 50 "$LOG"; fi
         exit 0 ;;
     --version|-V)
         cat "$HERE/VERSION"; exit 0 ;;
-    *)  echo "usage: snip-pin.sh [copy|save|last|history|clipboard|pin FILE|screen [all]|repeat [N]|toggle|close-all|clickthrough|reopen|clear|doctor|config|--version]" >&2
+    *)  echo "usage: snip-pin.sh [copy|save|last|history|clipboard|pin FILE|screen [all]|repeat [N]|toggle|close-all|clickthrough|reopen|clear|doctor|config|log|--version]" >&2
         echo "  (no argument: select a region, capture it, then copy and pin it, or what \`action\` says)" >&2; exit 2 ;;
 esac
 
@@ -461,6 +478,7 @@ fi
 
 IFS='x+' read -r W H X Y <<< "$geom"
 [[ "$W" -lt 1 || "$H" -lt 1 ]] && exit 0
+log "geometry $geom mode $MODE"
 
 # remember the area for `repeat`: newest first, no duplicates, the last AREAS
 if [[ "$AREAS" -gt 0 ]]; then
@@ -471,7 +489,8 @@ fi
 file="$CACHE/$(date +%Y%m%d_%H%M%S_%N)_x${X}_y${Y}.png"
 grim_opts=(-l 1)
 [[ "$CURSOR" -ne 0 ]] && grim_opts+=(-c)
-grim -g "${X},${Y} ${W}x${H}" "${grim_opts[@]}" "$file" || exit 1
+grim -g "${X},${Y} ${W}x${H}" "${grim_opts[@]}" "$file" || { log "grim failed"; exit 1; }
+log "captured $file"
 # autosave_dir: every capture also lands there, whatever happens to the pin
 if [[ -n "${SNIP_PIN_AUTOSAVE_DIR:-}" ]]; then
     autosave=$(SNIP_PIN_SAVE_DIR=$SNIP_PIN_AUTOSAVE_DIR save_dir)
