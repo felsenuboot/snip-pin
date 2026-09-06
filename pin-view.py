@@ -8,6 +8,7 @@ usage: pin-view.py IMAGE [X Y]
   Ctrl+R / Ctrl+Shift+R  rotate   Ctrl+H / Ctrl+J   flip   Ctrl+1  reset opacity
   Ctrl+C         copy image & close        Ctrl+S    save to screenshot folder & close
   Ctrl+Shift+S   save as (dialog; PNG, JPEG or WebP by extension), the pin stays
+  Ctrl+P         print (GTK's dialog, also print to PDF), the pin stays
   dbl-click      copy image & close        Esc       close (snip-pin.sh reopen brings it back)
   Shift+Esc      destroy: close for good
   right-click    copy image & close        middle-click  menu
@@ -331,7 +332,8 @@ window.snip-pin.ghost {{ border-style: dashed; }}          /* click-through: the
 # overrides an entry ("copy = ctrl+shift+c"), several bindings are separated
 # by spaces, an empty value unbinds. Colours stay on the digits.
 ACTIONS = {
-    "copy": "ctrl+c", "save": "ctrl+s", "save_as": "ctrl+shift+s", "close": "", "destroy": "shift+Escape",
+    "copy": "ctrl+c", "save": "ctrl+s", "save_as": "ctrl+shift+s", "print": "ctrl+p",
+    "close": "", "destroy": "shift+Escape",
     "cancel": "Escape", "confirm": "Return KP_Enter",
     "undo": "ctrl+z", "redo": "ctrl+shift+z ctrl+y",
     "reset": "ctrl+0", "reset_zoom": "", "reset_opacity": "ctrl+1", "click_through": "ctrl+t",
@@ -343,7 +345,8 @@ ACTIONS.update({f"tool_{tool}": key.lower() for tool, key, _, _ in TOOLS})
 ACTIONS.update({f"color_{i + 1}": str(i + 1) for i in range(len(COLORS))})
 # what the mouse does; [mouse] in the config file overrides ("right = menu")
 MOUSE_DEFAULTS = {"right": "copy", "double": "copy", "shift_double": "thumbnail", "middle": "menu"}
-MOUSE_ACTIONS = ("copy", "save", "save_as", "close", "destroy", "menu", "reset", "reset_zoom", "thumbnail", "none")
+MOUSE_ACTIONS = ("copy", "save", "save_as", "print", "close", "destroy", "menu", "reset", "reset_zoom",
+                 "thumbnail", "none")
 MOD_NAMES = {"ctrl": "CONTROL_MASK", "control": "CONTROL_MASK", "shift": "SHIFT_MASK",
              "alt": "ALT_MASK", "super": "SUPER_MASK", "win": "SUPER_MASK", "meta": "META_MASK"}
 KEY_ALIASES = {"esc": "Escape", "enter": "Return", "del": "Delete", "[": "bracketleft", "]": "bracketright",
@@ -1080,7 +1083,7 @@ class Pin(Gtk.ApplicationWindow):
         self.menu = Gtk.PopoverMenu.new_from_model(self.build_menu())
         self.menu.set_parent(self.area)
         self.menu.set_has_arrow(False)
-        for name in ("copy", "save", "save_as", "reset", "close", "destroy", "undo", "redo", "click_through",
+        for name in ("copy", "save", "save_as", "print", "reset", "close", "destroy", "undo", "redo", "click_through",
                      "thumbnail", "rotate_cw", "rotate_ccw", "flip_h", "flip_v"):
             act = Gio.SimpleAction.new(name, None)
             act.connect("activate", lambda *a, name=name: self.run_action(name))
@@ -1735,6 +1738,8 @@ class Pin(Gtk.ApplicationWindow):
             self.save()
         elif action == "save_as":
             self.save_as()
+        elif action == "print":
+            self.print_pin()
         elif action == "close":
             self.close()
         elif action == "destroy":
@@ -1862,6 +1867,7 @@ class Pin(Gtk.ApplicationWindow):
         m.append(f"Copy image & close\t{key_label('copy')}", "win.copy")
         m.append(f"Save to screenshots & close\t{key_label('save')}", "win.save")
         m.append(f"Save as…\t{key_label('save_as')}", "win.save_as")
+        m.append(f"Print…\t{key_label('print')}", "win.print")
         edit = Gio.Menu()
         edit.append(f"Undo\t{key_label('undo')}", "win.undo")
         edit.append(f"Redo\t{key_label('redo')}", "win.redo")
@@ -1940,6 +1946,39 @@ class Pin(Gtk.ApplicationWindow):
             return
         notify(f"Saved {dest}")
         self.close()
+
+    def print_pin(self, *a, export_to=None):
+        """GTK's print dialog; the image with its annotations at screen size (96 dpi),
+        shrunk to fit the page if needed, centred. The pin stays. export_to: a PDF path
+        instead of the dialog."""
+        pb = render_pixbuf(self.pixbuf, self.export_ops())
+        op = Gtk.PrintOperation()
+        op.set_n_pages(1)
+        op.set_job_name(os.path.basename(self.path))
+        op.set_embed_page_setup(True)
+
+        def draw_page(operation, context, page_nr):
+            cr = context.get_cairo_context()
+            pw, ph = context.get_width(), context.get_height()          # in points (1/72 inch)
+            f = min(pw / pb.get_width(), ph / pb.get_height(), 72 / 96)
+            w, h = pb.get_width() * f, pb.get_height() * f
+            cr.translate((pw - w) / 2, (ph - h) / 2)
+            cr.scale(f, f)
+            Gdk.cairo_set_source_pixbuf(cr, pb, 0, 0)
+            cr.get_source().set_filter(cairo.FILTER_BEST)
+            cr.paint()
+        op.connect("draw-page", draw_page)
+        try:
+            if export_to:
+                op.set_export_filename(export_to)
+                result = op.run(Gtk.PrintOperationAction.EXPORT, None)
+            else:
+                result = op.run(Gtk.PrintOperationAction.PRINT_DIALOG, self)
+        except GLib.Error as e:
+            notify(f"Cannot print: {e.message}", 3000)
+            return
+        if result == Gtk.PrintOperationResult.ERROR:
+            notify("Printing failed", 3000)
 
     def save_as(self, *a):
         """A file dialog, preset with the folder, the pattern and the last used extension; the pin stays."""

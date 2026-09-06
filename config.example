@@ -40,6 +40,7 @@ thumb_size = 75               # side of the tile a pin collapses into (Ctrl+M, S
 #copy = ctrl+c
 #save = ctrl+s
 #save_as = ctrl+shift+s       # file dialog; PNG, JPEG or WebP by the extension you type; the pin stays open
+#print = ctrl+p               # GTK's print dialog (printers, print to PDF); the pin stays open
 #close =                      # close without copying (cancel does that when no tool is active)
 #destroy = shift+Escape       # close for good: `reopen` cannot bring it back
 #cancel = Escape              # cancel crop / deselect tool / close
@@ -71,7 +72,7 @@ thumb_size = 75               # side of the tile a pin collapses into (Ctrl+M, S
 #color_1 = 1                  # ... color_7 = 7
 
 [mouse]
-# right, double, shift_double and middle click: copy, save, save_as, close, destroy, menu,
+# right, double, shift_double and middle click: copy, save, save_as, print, close, destroy, menu,
 # reset, reset_zoom, thumbnail or none
 #right = copy
 #double = copy
