@@ -184,6 +184,7 @@ effective settings and where each comes from.
 | `sel_size` | `1` | show the selection's size while dragging; `0` hides it |
 | `cursor` | `0` | `1` includes the mouse cursor in the capture |
 | `areas` | `8` | capture areas remembered for `repeat` |
+| `default_tool` | `none` | tool active as soon as a pin opens: `rect`, `ellipse`, `arrow`, `pen`, `text`, `counter`, `marker`, `blur` |
 | `action` | `copy+pin` | what a bare `snip-pin.sh` (and `screen`, `repeat`) does with the capture: `copy`, `save`, `pin`, joined by `+` |
 
 Without `save_dir`, `Ctrl+S` saves to the folder named in
