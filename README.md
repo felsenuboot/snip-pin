@@ -175,6 +175,7 @@ effective settings and where each comes from.
 | `tap_ms` | `300` | double-tap window for opening the history |
 | `border` | `#ff9f1c` | colour of the 2 px border a pin draws around itself |
 | `save_dir` | unset | where `Ctrl+S` saves; `~` and `$VARS` are expanded |
+| `autosave_dir` | unset | every capture is also saved there (the raw capture, without annotations) |
 | `elements_budget_ms` | `150` | time the element detector may spend joining edges |
 | `sel_border` | `#888888ff` | outline colour of the selection (`#rrggbb` or `#rrggbbaa`) |
 | `sel_width` | `1` | outline width in px |

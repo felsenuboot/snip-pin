@@ -7,6 +7,7 @@ keep_days = 7                 # days to keep snips in the cache; 0 keeps them fo
 tap_ms = 300                  # double-tap window (ms) for opening the history
 border = #ff9f1c              # colour of the 2 px border around a pin
 #save_dir = ~/Pictures/Screenshots   # where Ctrl+S saves; default: ML4W setting or the XDG pictures folder
+#autosave_dir = ~/Pictures/Snips      # every capture is also saved here (raw, without annotations)
 elements_budget_ms = 150      # time the element detector may spend joining edges
 
 # the selection (slurp): outline colour and width, the dim over the rest of the

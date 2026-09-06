@@ -466,3 +466,24 @@ def test_action_setting_controls_the_bare_command(tmp_path):
     assert run([], env).returncode == 0
     wait_for(viewer_log)
     assert "wl-copy" in log.read_text()
+
+
+def test_autosave_dir_gets_every_capture(tmp_path):
+    viewer_log = tmp_path / "viewer.log"
+    env = make_env(tmp_path, viewer_log)
+    b, log = fake_tools(tmp_path)
+    env["PATH"] = f"{b}:{env['PATH']}"
+    env["SNIP_NO_ELEMENTS"] = "1"
+    env["SNIP_PIN_AUTOSAVE_DIR"] = "~/Auto/$USER"
+    env["USER"] = "me"
+    assert run([], env).returncode == 0                          # the normal snip: copied, pinned, autosaved
+    wait_for(viewer_log)
+    env["SNIP_GEOM"] = "10x10+0+0"
+    assert run(["copy"], env).returncode == 0                    # copy-only: autosaved too
+    saved = os.listdir(tmp_path / "Auto" / "me")
+    assert len(saved) == 2 and all(f.startswith("pin_") for f in saved)
+    assert "wl-copy" in log.read_text()
+    # unwritable target: the snip still goes through
+    env["SNIP_PIN_AUTOSAVE_DIR"] = "/proc/nope"
+    assert run(["copy"], env).returncode == 0
+    assert log.read_text().count("grim") == 3
