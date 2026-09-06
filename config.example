@@ -25,6 +25,8 @@ confirm_close_all = 1         # `snip-pin.sh close-all` asks before closing seve
 zoom_at_pointer = 1           # the wheel zooms around the pointer (the pin moves); 0 keeps the top-left corner
 smooth = 1                    # bilinear scaling; 0 draws crisp pixel blocks when zoomed in (menu: Smooth scaling)
 reopen = 5                    # closed pins `snip-pin.sh reopen` can bring back; 0 turns it off
+opacity = 100                 # starting opacity of a pin, 10-100; Ctrl+1 returns to it
+alpha_bg = transparent        # behind transparent images: transparent (desktop shows through), checker, or #rrggbb
 
 [keys]
 # action = binding [binding ...]; modifiers ctrl, shift, alt, super; an empty

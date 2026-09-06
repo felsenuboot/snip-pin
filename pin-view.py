@@ -171,6 +171,41 @@ class Config:
 CFG = Config()
 
 
+def alpha_background():
+    """How transparent parts of an image show: "transparent" (the desktop shows
+    through), "checker", or a solid colour ("#rrggbb"). Setting alpha_bg."""
+    v = CFG.get("alpha_bg", "transparent").strip().lower()
+    if v in ("checker", "checkerboard"):
+        return "checker"
+    if len(v) == 7 and v.startswith("#") and all(ch in "0123456789abcdef" for ch in v[1:]):
+        return v
+    return "transparent"
+
+
+def default_opacity():
+    """Starting opacity of a new pin in percent (setting opacity, 10-100)."""
+    try:
+        return min(100, max(10, int(CFG.get("opacity", "100")))) / 100
+    except ValueError:
+        return 1.0
+
+
+_checker = None
+
+
+def checker_pattern():
+    global _checker
+    if _checker is None:
+        surf = cairo.ImageSurface(cairo.FORMAT_RGB24, 16, 16)
+        cr = cairo.Context(surf)
+        cr.set_source_rgb(0.80, 0.80, 0.80); cr.paint()
+        cr.set_source_rgb(0.55, 0.55, 0.55)
+        cr.rectangle(0, 0, 8, 8); cr.rectangle(8, 8, 8, 8); cr.fill()
+        _checker = cairo.SurfacePattern(surf)
+        _checker.set_extend(cairo.EXTEND_REPEAT)
+    return _checker
+
+
 def default_tool():
     """The tool a new pin starts with (default_tool), or None; unknown names are reported once."""
     name = CFG.get("default_tool", "none").strip().lower()
@@ -787,7 +822,8 @@ class Pin(Gtk.ApplicationWindow):
         # covers exactly the region it was taken from; zoom is relative to that
         self.base_scale = 1.0 / out_scale
         self.scale = max(self.base_scale, self.min_scale())   # tiny snips open enlarged, uniformly
-        self.opacity = 1.0
+        self.opacity = default_opacity()
+        self.alpha_bg = alpha_background()
         # annotation state
         self.tool = None
         self.color_idx = 0
@@ -827,7 +863,7 @@ class Pin(Gtk.ApplicationWindow):
             self.ops = ops_from_json(state.get("ops", []))
             self.scale = max(self.min_scale(), min(float(state.get("scale", self.scale)), MAX_SCALE))
             self.opacity = min(1.0, max(0.1, float(state.get("opacity", 1.0))))
-            self.set_opacity(self.opacity)
+        self.set_opacity(self.opacity)
         self.apply_scale()
         if default_tool() is not None:
             self.set_tool(default_tool())
@@ -949,6 +985,12 @@ class Pin(Gtk.ApplicationWindow):
     def draw(self, area, cr, w, h):
         if self.ghost:
             self.apply_input_region()
+        if self.pixbuf.get_has_alpha() and self.alpha_bg != "transparent":
+            if self.alpha_bg == "checker":
+                cr.set_source(checker_pattern())
+            else:
+                cr.set_source_rgb(*hex_to_rgb(self.alpha_bg))
+            cr.paint()
         cr.scale(w / self.iw, h / self.ih)
         Gdk.cairo_set_source_pixbuf(cr, self.pixbuf, 0, 0)
         cr.get_source().set_filter(pick_filter(self.smooth, self.scale, self.base_scale))
@@ -1235,8 +1277,8 @@ class Pin(Gtk.ApplicationWindow):
         if self.turns:
             self.transform("rotate", 4 - self.turns)
         self.set_scale(self.base_scale)
-        self.opacity = 1.0
-        self.set_opacity(1.0)
+        self.opacity = default_opacity()
+        self.set_opacity(self.opacity)
         self.show_osd("reset")
 
     def set_pixbuf(self, pixbuf, dx, dy):
@@ -1504,7 +1546,9 @@ class Pin(Gtk.ApplicationWindow):
         elif action == "smooth":
             self.set_smooth(not self.smooth)
         elif action == "reset_opacity":
-            self.opacity = 1.0; self.set_opacity(1.0); self.show_osd("100 %")
+            self.opacity = default_opacity()
+            self.set_opacity(self.opacity)
+            self.show_osd(f"{round(self.opacity * 100)} %")
         elif action == "click_through":
             self.set_click_through(not self.ghost)
         elif action == "width_down":
