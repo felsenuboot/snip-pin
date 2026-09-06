@@ -143,6 +143,8 @@ opened from the picker appear centred.
 
 | Command | What it does |
 |---|---|
+| `snip-pin.sh copy` | select and copy to the clipboard, no pin (Snipaste's "Snip and copy") |
+| `snip-pin.sh save` | select and save to the screenshot folder, no pin |
 | `snip-pin.sh last` | pin the newest snip again, where it was taken |
 | `snip-pin.sh history` | open a thumbnail grid of all cached snips, newest first |
 | `snip-pin.sh clipboard` | pin the image in the clipboard (PNG, JPEG, WebP, … or a copied image file), centred on the screen |
@@ -181,6 +183,7 @@ effective settings and where each comes from.
 | `sel_size` | `1` | show the selection's size while dragging; `0` hides it |
 | `cursor` | `0` | `1` includes the mouse cursor in the capture |
 | `areas` | `8` | capture areas remembered for `repeat` |
+| `action` | `copy+pin` | what a bare `snip-pin.sh` (and `screen`, `repeat`) does with the capture: `copy`, `save`, `pin`, joined by `+` |
 
 Without `save_dir`, `Ctrl+S` saves to the folder named in
 `~/.config/ml4w/settings/screenshot-folder` if that file exists (ML4W

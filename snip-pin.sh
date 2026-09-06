@@ -10,7 +10,9 @@
 # Ctrl+S save, middle-click menu, Esc = close, double-/right-click = copy & close.
 #
 # Subcommands (all bindable):
-#   snip-pin.sh            select, capture, pin (default)
+#   snip-pin.sh            select, capture, then what `action` says (default: copy+pin)
+#   snip-pin.sh copy       select, capture, copy to the clipboard; no pin
+#   snip-pin.sh save       select, capture, save to the screenshot folder; no pin
 #   snip-pin.sh last       pin the newest cached snip again
 #   snip-pin.sh history    thumbnail picker for cached snips
 #   snip-pin.sh clipboard  pin the image in the clipboard
@@ -82,6 +84,9 @@ SEL_FILL=$(color_or SNIP_PIN_SEL_FILL '#00000000')         #        fill inside 
 SEL_SIZE=$(int_or SNIP_PIN_SEL_SIZE 1)                    #        1 = show the size while dragging
 CURSOR=$(int_or SNIP_PIN_CURSOR 0)                        # 1 = include the mouse cursor in the capture
 AREAS=$(int_or SNIP_PIN_AREAS 8)                          # how many capture areas `repeat` remembers
+# what a capture ends with: any combination of copy, save and pin joined by +
+if [[ "${SNIP_PIN_ACTION:-}" =~ ^(copy|save|pin)(\+(copy|save|pin))*$ ]]; then ACTION=$SNIP_PIN_ACTION; else ACTION="copy+pin"; fi
+MODE=$ACTION
 
 mkdir -p "$CACHE/kept" "$STATE"
 [[ "$KEEP" -gt 0 ]] && find "$CACHE" -maxdepth 1 -name '*.png' -mtime +"$KEEP" -delete 2>/dev/null
@@ -96,6 +101,33 @@ abort_selection() {
     [[ -r "$STATE/slurp" ]] && read -r pid < "$STATE/slurp" || return 1
     [[ "$pid" =~ ^[0-9]+$ && "$(cat "/proc/$pid/comm" 2>/dev/null)" == slurp ]] || return 1
     kill "$pid" 2>/dev/null
+}
+
+# Where `save` puts the file: save_dir (~ and $VARS expanded), the ML4W
+# setting, xdg-user-dir PICTURES, ~/Pictures. Same order as the viewer.
+save_dir() {
+    local d="${SNIP_PIN_SAVE_DIR:-}" name
+    [[ -z "$d" && -r "$HOME/.config/ml4w/settings/screenshot-folder" ]] && read -r d < "$HOME/.config/ml4w/settings/screenshot-folder"
+    if [[ -n "$d" ]]; then
+        d="${d/#\~/$HOME}"
+        while [[ "$d" =~ \$\{?([A-Za-z_][A-Za-z0-9_]*)\}? ]]; do    # expand $VAR and ${VAR}, unset -> empty
+            name=${BASH_REMATCH[1]}; d="${d/"${BASH_REMATCH[0]}"/${!name:-}}"
+        done
+        echo "$d"; return
+    fi
+    d=$(xdg-user-dir PICTURES 2>/dev/null)
+    echo "${d:-$HOME/Pictures}"
+}
+
+# Copy a capture into the screenshot folder under a unique name; prints the path.
+quick_save() {
+    local dir dest n=2
+    dir=$(save_dir)
+    mkdir -p "$dir" || return 1
+    dest="$dir/pin_$(date +%Y%m%d_%H%M%S).png"
+    while [[ -e "$dest" ]]; do dest="${dest%.png}_$n.png"; dest="${dest/_$((n - 1))_$n.png/_$n.png}"; n=$((n + 1)); done
+    cp "$1" "$dest" || return 1
+    echo "$dest"
 }
 
 # Pin a cached file; the position comes from its name when present. All pins
@@ -183,7 +215,8 @@ PY
         [[ "$n" =~ ^[1-9][0-9]*$ ]] || { echo "usage: snip-pin.sh repeat [N]" >&2; exit 1; }
         SNIP_GEOM=$(sed -n "${n}p" "$CACHE/areas" 2>/dev/null)
         [[ "$SNIP_GEOM" =~ ^[0-9]+x[0-9]+\+-?[0-9]+\+-?[0-9]+$ ]] || { notify "No previous area to repeat"; exit 0; } ;;
-    "")
+    ""|copy|save)
+        [[ -n "${1:-}" ]] && MODE=$1
         # Double tap: if another instance started a selection less than TAP_MS
         # ago, tell it to abort (flag file, and end slurp if it is already up)
         # and open the history instead.
@@ -261,11 +294,12 @@ PY
         show sel_size 1
         show cursor 0
         show areas 8
+        show action copy+pin
         exit 0 ;;
     --version|-V)
         cat "$HERE/VERSION"; exit 0 ;;
-    *)  echo "usage: snip-pin.sh [last|history|clipboard|pin FILE|screen [all]|repeat [N]|clear|doctor|config|--version]" >&2
-        echo "  (no argument: select a region, capture it, pin it)" >&2; exit 2 ;;
+    *)  echo "usage: snip-pin.sh [copy|save|last|history|clipboard|pin FILE|screen [all]|repeat [N]|clear|doctor|config|--version]" >&2
+        echo "  (no argument: select a region, capture it, then copy and pin it, or what \`action\` says)" >&2; exit 2 ;;
 esac
 
 if [[ -n "$SNIP_GEOM" ]]; then
@@ -348,5 +382,12 @@ file="$CACHE/$(date +%Y%m%d_%H%M%S_%N)_x${X}_y${Y}.png"
 grim_opts=(-l 1)
 [[ "$CURSOR" -ne 0 ]] && grim_opts+=(-c)
 grim -g "${X},${Y} ${W}x${H}" "${grim_opts[@]}" "$file" || exit 1
-wl-copy --type image/png < "$file"
-pin_file "$file"
+if [[ "$MODE" == *copy* ]]; then
+    wl-copy --type image/png < "$file"
+    [[ "$MODE" == *pin* ]] || notify "Copied to clipboard"
+fi
+if [[ "$MODE" == *save* ]]; then
+    if dest=$(quick_save "$file"); then notify "Saved $dest"; else notify "Cannot save to $(save_dir)"; fi
+fi
+[[ "$MODE" == *pin* ]] && pin_file "$file"
+exit 0

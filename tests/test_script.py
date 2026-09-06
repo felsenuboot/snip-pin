@@ -314,7 +314,7 @@ def test_config_file_fills_in_and_environment_wins(tmp_path):
     assert "border" in out and "#123456" in out
     assert "= ~/Shots " in out and "synced" not in out
     assert "elements_budget_ms" in out and "= 42 " in out
-    assert "copy" not in out and "right" not in out             # sections are the viewer's business
+    assert "ctrl+shift+c" not in out and "right" not in out     # sections are the viewer's business
     assert not os.path.exists("/tmp/never")
 
 
@@ -416,3 +416,53 @@ def test_areas_setting_limits_the_list(tmp_path):
         env["SNIP_GEOM"] = g
         run([], env)
     assert (tmp_path / "cache" / "snip-pin" / "areas").read_text().split() == ["30x30+0+0", "20x20+0+0"]
+
+
+def test_copy_mode_copies_without_a_pin(tmp_path):
+    viewer_log = tmp_path / "viewer.log"
+    env = make_env(tmp_path, viewer_log)
+    b, log = fake_tools(tmp_path)
+    env["PATH"] = f"{b}:{env['PATH']}"
+    env["SNIP_NO_ELEMENTS"] = "1"
+    assert run(["copy"], env).returncode == 0
+    tools = log.read_text()
+    assert "grim" in tools and "wl-copy" in tools
+    time.sleep(0.3)
+    assert not viewer_log.exists()
+
+
+def test_save_mode_saves_to_save_dir_without_copy_or_pin(tmp_path):
+    viewer_log = tmp_path / "viewer.log"
+    env = make_env(tmp_path, viewer_log)
+    b, log = fake_tools(tmp_path)
+    env["PATH"] = f"{b}:{env['PATH']}"
+    env["SNIP_NO_ELEMENTS"] = "1"
+    env["SNIP_PIN_SAVE_DIR"] = "~/Shots/$USER/${KIND}"
+    env["USER"] = "me"
+    env["KIND"] = "work"
+    assert run(["save"], env).returncode == 0
+    assert run(["save"], env).returncode == 0                    # a second one in the same second: unique name
+    saved = sorted(os.listdir(tmp_path / "Shots" / "me" / "work"))
+    assert len(saved) == 2 and all(f.startswith("pin_") and f.endswith(".png") for f in saved)
+    assert "wl-copy" not in log.read_text()
+    time.sleep(0.3)
+    assert not viewer_log.exists()
+
+
+def test_action_setting_controls_the_bare_command(tmp_path):
+    viewer_log = tmp_path / "viewer.log"
+    env = make_env(tmp_path, viewer_log)
+    b, log = fake_tools(tmp_path)
+    env["PATH"] = f"{b}:{env['PATH']}"
+    env["SNIP_NO_ELEMENTS"] = "1"
+    cfg = tmp_path / ".config" / "snip-pin"
+    cfg.mkdir(parents=True)
+    (cfg / "config").write_text("action = pin\n")
+    assert run([], env).returncode == 0
+    wait_for(viewer_log)
+    assert "wl-copy" not in log.read_text()
+    (cfg / "config").write_text("action = bogus\n")               # invalid: the default copy+pin
+    viewer_log.unlink()
+    assert run([], env).returncode == 0
+    wait_for(viewer_log)
+    assert "wl-copy" in log.read_text()
