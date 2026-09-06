@@ -324,6 +324,7 @@ PY
         echo "optional:"
         check hyprpicker optional "freezes the screen during the selection"
         check notify-send optional "toasts (libnotify)"
+        check tesseract optional "Copy text (OCR); language packs: tesseract --list-langs"
         if python3 -c 'import numpy' 2>/dev/null; then printf '  %-12s %s\n' "numpy" "$(python3 -c 'import numpy; print(numpy.__version__)')"
         else printf '  %-12s MISSING  (element snapping; windows still snap)\n' "numpy"; fi
         if command -v hyprctl >/dev/null && tag=$(hyprctl version -j 2>/dev/null | jq -r '.tag // .version' 2>/dev/null) && [[ -n "$tag" ]]; then
@@ -382,6 +383,8 @@ PY
         show text_margin 15
         show text_fg '#000000'
         show text_bg '#ffffff'
+        show ocr_lang eng
+        show ocr_cmd ''
         exit 0 ;;
     --version|-V)
         cat "$HERE/VERSION"; exit 0 ;;

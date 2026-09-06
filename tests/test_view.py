@@ -684,3 +684,14 @@ def test_render_text_cli(tmp_path):
     src.write_text("   \n")
     assert subprocess.run([os.path.join(ROOT, "pin-view.py"), "--render-text", str(src), str(out)],
                           capture_output=True, timeout=20).returncode == 1
+
+
+def test_ocr_helpers(view):
+    argv = view.ocr_argv("", "eng+deu", "/t/x.png", "/usr/bin/tesseract")
+    assert argv == ["/usr/bin/tesseract", "/t/x.png", "stdout", "-l", "eng+deu"]
+    assert view.ocr_argv("", "", "/t/x.png", "/usr/bin/tesseract")[-1] == "eng"
+    assert view.ocr_argv("myocr --png %f", "eng", "/t/x.png", None) == ["myocr", "--png", "/t/x.png"]
+    assert view.ocr_argv("", "eng", "/t/x.png", None) is None
+    assert view.ocr_scale(100, 40) == 3 and view.ocr_scale(800, 300) == 2 and view.ocr_scale(1200, 700) == 1
+    assert view.clean_ocr("\n\n hello  \nworld \n\n\x0c") == " hello\nworld"
+    assert view.ACTIONS["ocr"] == "ctrl+shift+c" and "ocr" in view.MOUSE_ACTIONS

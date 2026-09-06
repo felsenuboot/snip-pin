@@ -33,6 +33,7 @@ layout) may still change.
 - Palette: `palette` sets up to nine swatches (keys `1`–`9`), `widths` two to five stroke widths, `Ctrl`+click on a swatch opens a colour chooser for the session, and every tool remembers the colour and width it was last used with (`tool_colors = 0` turns that off) (#79).
 - Eraser tool (`X`): click an annotation to remove it. With no tool active a click selects an annotation, a drag moves it, `Delete` removes it, a swatch or width restyles it; every step is undoable and numbered steps renumber (#80).
 - `snip-pin.sh clipboard` with text in the clipboard renders it into an image (Pango, `text_font`, `text_width`, `text_margin`, `text_fg`, `text_bg`) and pins that; a copied path to an image file pins the file (#71).
+- `Ctrl+Shift+C` copies the text in a pin, recognised by tesseract (`ocr_lang`, or any engine via `ocr_cmd`); with a crop marquee drawn only that part is read. Small captures are upscaled first; the result is toasted and the pin stays (#84).
 
 ## [0.3.0] – 2026-09-06
 

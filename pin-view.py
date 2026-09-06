@@ -9,6 +9,7 @@ usage: pin-view.py IMAGE [X Y]
   Ctrl+C         copy image & close        Ctrl+S    save to screenshot folder & close
   Ctrl+Shift+S   save as (dialog; PNG, JPEG or WebP by extension), the pin stays
   Ctrl+P         print (GTK's dialog, also print to PDF), the pin stays
+  Ctrl+Shift+C   copy the text in the pin (tesseract); with a crop marquee, only that part
   dbl-click      copy image & close        Esc       close (snip-pin.sh reopen brings it back)
   Shift+Esc      destroy: close for good
   right-click    copy image & close        middle-click  menu
@@ -474,7 +475,7 @@ def save_tool_memory():
 # overrides an entry ("copy = ctrl+shift+c"), several bindings are separated
 # by spaces, an empty value unbinds. Colours stay on the digits.
 ACTIONS = {
-    "copy": "ctrl+c", "save": "ctrl+s", "save_as": "ctrl+shift+s", "print": "ctrl+p",
+    "copy": "ctrl+c", "save": "ctrl+s", "save_as": "ctrl+shift+s", "print": "ctrl+p", "ocr": "ctrl+shift+c",
     "close": "", "destroy": "shift+Escape",
     "cancel": "Escape", "confirm": "Return KP_Enter", "delete": "Delete",
     "undo": "ctrl+z", "redo": "ctrl+shift+z ctrl+y",
@@ -489,7 +490,8 @@ ACTIONS["open_with"] = ""
 ACTIONS.update({f"color_{i}": str(i) for i in range(1, 10)})
 # what the mouse does; [mouse] in the config file overrides ("right = menu")
 MOUSE_DEFAULTS = {"right": "copy", "double": "copy", "shift_double": "thumbnail", "middle": "menu"}
-MOUSE_ACTIONS = ("copy", "save", "save_as", "print", "open_with", "close", "destroy", "menu", "reset", "reset_zoom",
+MOUSE_ACTIONS = ("copy", "save", "save_as", "print", "ocr", "open_with", "close", "destroy", "menu", "reset",
+                 "reset_zoom",
                  "thumbnail", "none", *[f"command_{i}" for i in range(1, 10)])
 MOD_NAMES = {"ctrl": "CONTROL_MASK", "control": "CONTROL_MASK", "shift": "SHIFT_MASK",
              "alt": "ALT_MASK", "super": "SUPER_MASK", "win": "SUPER_MASK", "meta": "META_MASK"}
@@ -535,14 +537,17 @@ MOD_MASK = int(Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.SHIFT_MASK
 def build_keymap(overrides):
     """{(keyval, mods): action} from the defaults and the [keys] section; bad specs are reported and skipped."""
     keymap = {}
-    for action, default in ACTIONS.items():
-        spec = overrides.get(action, default) if action in overrides else default
-        for one in spec.split():
-            b = parse_binding(one)
-            if b is None:
-                print(f"pin-view: config [keys] {action} = {one}: unknown key", file=sys.stderr)
+    # defaults first, then the overrides: a rebinding that takes another action's default key wins
+    for pass_overrides in (False, True):
+        for action, default in ACTIONS.items():
+            if (action in overrides) != pass_overrides:
                 continue
-            keymap[b] = action
+            for one in (overrides[action] if pass_overrides else default).split():
+                b = parse_binding(one)
+                if b is None:
+                    print(f"pin-view: config [keys] {action} = {one}: unknown key", file=sys.stderr)
+                    continue
+                keymap[b] = action
     for action in overrides:
         if action not in ACTIONS:
             print(f"pin-view: config [keys] {action}: unknown action", file=sys.stderr)
@@ -788,6 +793,42 @@ def pick_filter(smooth, scale, base_scale):
     return cairo.FILTER_GOOD if smooth or scale <= base_scale * 1.001 else cairo.FILTER_NEAREST
 
 
+# ---- OCR ---------------------------------------------------------------------
+# "Copy text" runs tesseract (or ocr_cmd, a command that reads a PNG path and
+# prints text) on the pin, or on the crop marquee's rectangle, and copies the
+# result. Small captures are upscaled first; tesseract wants big glyphs.
+TESSERACT = shutil.which("tesseract")
+
+
+def ocr_argv(cmd_setting, lang, path, tesseract=TESSERACT):
+    """argv for the recogniser, or None when nothing is available."""
+    if cmd_setting.strip():
+        return command_argv(cmd_setting, path, path)
+    if tesseract:
+        return [tesseract, path, "stdout", "-l", lang or "eng"]
+    return None
+
+
+def ocr_scale(w, h):
+    """Upscale factor for a region: tesseract does best with x-heights of 20-30 px."""
+    short = min(w, h)
+    if short < 200:
+        return 3
+    if short < 500:
+        return 2
+    return 1
+
+
+def clean_ocr(text):
+    """Strip trailing blanks per line and blank lines at both ends."""
+    lines = [ln.rstrip() for ln in text.replace("\r", "").split("\n")]
+    while lines and not lines[0]:
+        lines.pop(0)
+    while lines and not lines[-1]:
+        lines.pop()
+    return "\n".join(lines)
+
+
 STATE_DIR = os.path.join(GLib.get_user_state_dir(), "snip-pin")
 
 
@@ -890,6 +931,13 @@ class ClipboardOwner:
         self.file = None
         self.clipboard = Gdk.Display.get_default().get_clipboard()
         self.clipboard.connect("changed", self.on_changed)
+
+    def offer_text(self, text):
+        self.drop_file()
+        self.clipboard.set(text)
+        if not self.holding:
+            self.holding = True
+            self.app.hold()
 
     def offer(self, png_path, as_file):
         texture = Gdk.Texture.new_from_filename(png_path)
@@ -1403,8 +1451,8 @@ class Pin(Gtk.ApplicationWindow):
         self.menu = Gtk.PopoverMenu.new_from_model(self.build_menu())
         self.menu.set_parent(self.area)
         self.menu.set_has_arrow(False)
-        for name in ("copy", "save", "save_as", "print", "open_with", "reset", "close", "destroy", "undo", "redo",
-                     "click_through", "thumbnail", "rotate_cw", "rotate_ccw", "flip_h", "flip_v",
+        for name in ("copy", "save", "save_as", "print", "ocr", "open_with", "reset", "close", "destroy",
+                     "undo", "redo", "click_through", "thumbnail", "rotate_cw", "rotate_ccw", "flip_h", "flip_v",
                      *[f"command_{i}" for i in range(1, 10)]):
             act = Gio.SimpleAction.new(name, None)
             act.connect("activate", lambda *a, name=name: self.run_action(name))
@@ -2223,6 +2271,8 @@ class Pin(Gtk.ApplicationWindow):
             self.save_as()
         elif action == "print":
             self.print_pin()
+        elif action == "ocr":
+            self.ocr()
         elif action == "open_with":
             self.open_with()
         elif action.startswith("command_"):
@@ -2363,6 +2413,7 @@ class Pin(Gtk.ApplicationWindow):
         m.append(f"Copy image & close\t{key_label('copy')}", "win.copy")
         m.append(f"Save to screenshots & close\t{key_label('save')}", "win.save")
         m.append(f"Save as…\t{key_label('save_as')}", "win.save_as")
+        m.append(f"Copy text (OCR)\t{key_label('ocr')}", "win.ocr")
         m.append(f"Print…\t{key_label('print')}", "win.print")
         m.append(f"Open with…\t{key_label('open_with')}", "win.open_with")
         cmds = commands()
@@ -2491,6 +2542,53 @@ class Pin(Gtk.ApplicationWindow):
                 if "cancel" not in e.message.lower():
                     notify(f"Cannot open: {e.message}", 3000)
         launcher.launch(self, None, done)
+
+    def ocr(self, *a):
+        """Recognise the text in the pin (or in the crop marquee) and copy it; the pin stays."""
+        argv_probe = ocr_argv(CFG.get("ocr_cmd", ""), CFG.get("ocr_lang", "eng"), "x")
+        if argv_probe is None:
+            notify("No OCR engine: install tesseract (and a language pack)", 4000)
+            return
+        region = self.crop_pending or (0, 0, self.iw, self.ih)
+        x0, y0, w, h = region
+        pb = self.pixbuf.new_subpixbuf(x0, y0, w, h)
+        f = ocr_scale(w, h)
+        if f > 1:
+            pb = pb.scale_simple(w * f, h * f, GdkPixbuf.InterpType.HYPER)
+        fd, tmp = tempfile.mkstemp(prefix="snip-pin-ocr-", suffix=".png", dir=RUNTIME_DIR)
+        os.close(fd)
+        pb.savev(tmp, "png", [], [])
+        argv = ocr_argv(CFG.get("ocr_cmd", ""), CFG.get("ocr_lang", "eng"), tmp)
+        self.show_osd("recognising…")
+        app = self.get_application()
+
+        def work():
+            try:
+                r = subprocess.run(argv, capture_output=True, text=True, timeout=60)
+                text, err = clean_ocr(r.stdout), r.stderr.strip().splitlines()
+                rc = r.returncode
+            except (OSError, subprocess.SubprocessError) as e:
+                text, err, rc = "", [str(e)], 1
+            finally:
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    pass
+            GLib.idle_add(finish, text, err, rc)
+
+        def finish(text, err, rc):
+            if rc != 0 or not text:
+                notify(f"No text recognised{': ' + err[-1] if err and rc != 0 else ''}", 4000)
+                return False
+            try:
+                clipboard_owner(app).offer_text(text)
+            except GLib.Error:
+                subprocess.run(["wl-copy"], input=text.encode())
+            first = text.splitlines()[0]
+            notify(f"Copied {len(text)} characters: {first[:60]}{'…' if len(first) > 60 else ''}", 3000)
+            play_sound()
+            return False
+        threading.Thread(target=work, daemon=True).start()
 
     def print_pin(self, *a, export_to=None):
         """GTK's print dialog; the image with its annotations at screen size (96 dpi),
