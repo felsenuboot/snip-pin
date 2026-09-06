@@ -119,10 +119,11 @@ save_dir() {
     echo "${d:-$HOME/Pictures}"
 }
 
-# Copy a capture into the screenshot folder under a unique name; prints the path.
+# Copy a capture into a folder (default: the screenshot folder) under a
+# unique name; prints the path.
 quick_save() {
-    local dir dest n=2
-    dir=$(save_dir)
+    local dir=${2:-} dest n=2
+    [[ -n "$dir" ]] || dir=$(save_dir)
     mkdir -p "$dir" || return 1
     dest="$dir/pin_$(date +%Y%m%d_%H%M%S).png"
     while [[ -e "$dest" ]]; do dest="${dest%.png}_$n.png"; dest="${dest/_$((n - 1))_$n.png/_$n.png}"; n=$((n + 1)); done
@@ -295,6 +296,7 @@ PY
         show cursor 0
         show areas 8
         show action copy+pin
+        show autosave_dir ''
         exit 0 ;;
     --version|-V)
         cat "$HERE/VERSION"; exit 0 ;;
@@ -382,6 +384,11 @@ file="$CACHE/$(date +%Y%m%d_%H%M%S_%N)_x${X}_y${Y}.png"
 grim_opts=(-l 1)
 [[ "$CURSOR" -ne 0 ]] && grim_opts+=(-c)
 grim -g "${X},${Y} ${W}x${H}" "${grim_opts[@]}" "$file" || exit 1
+# autosave_dir: every capture also lands there, whatever happens to the pin
+if [[ -n "${SNIP_PIN_AUTOSAVE_DIR:-}" ]]; then
+    autosave=$(SNIP_PIN_SAVE_DIR=$SNIP_PIN_AUTOSAVE_DIR save_dir)
+    quick_save "$file" "$autosave" >/dev/null || notify "Cannot autosave to $autosave"
+fi
 if [[ "$MODE" == *copy* ]]; then
     wl-copy --type image/png < "$file"
     [[ "$MODE" == *pin* ]] || notify "Copied to clipboard"

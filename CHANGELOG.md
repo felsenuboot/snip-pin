@@ -16,6 +16,7 @@ layout) may still change.
 - `snip-pin.sh screen` captures the monitor under the pointer without a selection, `screen all` every monitor as one image; both pin the result like a snip (#96).
 - `snip-pin.sh repeat [N]` captures the area of the N-th last snip again without a selection; the last `areas` (default 8) regions are remembered in the cache (#76).
 - `snip-pin.sh copy` and `snip-pin.sh save` select and copy or save without pinning; `action` in the config sets what the bare command does (`copy`, `save`, `pin` joined by `+`, default `copy+pin`) (#77).
+- `autosave_dir`: every capture is also saved to that folder (raw, without annotations), whatever happens to the pin afterwards (#82).
 
 ## [0.3.0] – 2026-09-06
 
