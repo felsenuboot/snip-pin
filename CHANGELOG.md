@@ -13,6 +13,7 @@ layout) may still change.
 - Rebindable keys and mouse buttons on a pin: `[keys]` maps actions (`copy`, `save`, `undo`, `tool_arrow`, ...) to bindings such as `ctrl+shift+c`; `[mouse]` sets what right-click, double-click and middle-click do (`copy`, `save`, `close`, `menu`, `reset_zoom`, `none`). Menus show the configured keys (#87).
 - The selection's look is configurable: `sel_border`, `sel_width`, `sel_mask`, `sel_fill` (colours as `#rrggbb` or `#rrggbbaa`), and slurp shows the selection's size while dragging (`sel_size = 0` hides it) (#74).
 - `cursor = 1` includes the mouse cursor in the capture (#75).
+- `snip-pin.sh screen` captures the monitor under the pointer without a selection, `screen all` every monitor as one image; both pin the result like a snip (#96).
 
 ## [0.3.0] – 2026-09-06
 
