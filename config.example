@@ -8,6 +8,9 @@ tap_ms = 300                  # double-tap window (ms) for opening the history
 border = #ff9f1c              # colour of the 2 px border around a pin
 #save_dir = ~/Pictures/Screenshots   # where Ctrl+S saves; default: ML4W setting or the XDG pictures folder
 #autosave_dir = ~/Pictures/Snips      # every capture is also saved here (raw, without annotations)
+filename = pin_%Y%m%d_%H%M%S  # strftime pattern for saved files (quick save, Save as, autosave)
+format = png                  # quick save and autosave: png, jpg or webp
+quality = 90                  # JPEG / WebP quality, 1-100
 elements_budget_ms = 150      # time the element detector may spend joining edges
 
 # the selection (slurp): outline colour and width, the dim over the rest of the
@@ -35,6 +38,7 @@ thumb_size = 75               # side of the tile a pin collapses into (Ctrl+M, S
 # comma, ...) or a single character. Defaults shown.
 #copy = ctrl+c
 #save = ctrl+s
+#save_as = ctrl+shift+s       # file dialog; PNG, JPEG or WebP by the extension you type; the pin stays open
 #close =                      # close without copying (cancel does that when no tool is active)
 #destroy = shift+Escape       # close for good: `reopen` cannot bring it back
 #cancel = Escape              # cancel crop / deselect tool / close
@@ -66,7 +70,7 @@ thumb_size = 75               # side of the tile a pin collapses into (Ctrl+M, S
 #color_1 = 1                  # ... color_7 = 7
 
 [mouse]
-# right, double, shift_double and middle click: copy, save, close, destroy, menu,
+# right, double, shift_double and middle click: copy, save, save_as, close, destroy, menu,
 # reset, reset_zoom, thumbnail or none
 #right = copy
 #double = copy

@@ -7,6 +7,7 @@ usage: pin-view.py IMAGE [X Y]
   Ctrl+wheel     opacity         Ctrl+0            reset (zoom, opacity, rotation)
   Ctrl+R / Ctrl+Shift+R  rotate   Ctrl+H / Ctrl+J   flip   Ctrl+1  reset opacity
   Ctrl+C         copy image & close        Ctrl+S    save to screenshot folder & close
+  Ctrl+Shift+S   save as (dialog; PNG, JPEG or WebP by extension), the pin stays
   dbl-click      copy image & close        Esc       close (snip-pin.sh reopen brings it back)
   Shift+Esc      destroy: close for good
   right-click    copy image & close        middle-click  menu
@@ -330,7 +331,7 @@ window.snip-pin.ghost {{ border-style: dashed; }}          /* click-through: the
 # overrides an entry ("copy = ctrl+shift+c"), several bindings are separated
 # by spaces, an empty value unbinds. Colours stay on the digits.
 ACTIONS = {
-    "copy": "ctrl+c", "save": "ctrl+s", "close": "", "destroy": "shift+Escape",
+    "copy": "ctrl+c", "save": "ctrl+s", "save_as": "ctrl+shift+s", "close": "", "destroy": "shift+Escape",
     "cancel": "Escape", "confirm": "Return KP_Enter",
     "undo": "ctrl+z", "redo": "ctrl+shift+z ctrl+y",
     "reset": "ctrl+0", "reset_zoom": "", "reset_opacity": "ctrl+1", "click_through": "ctrl+t",
@@ -342,7 +343,7 @@ ACTIONS.update({f"tool_{tool}": key.lower() for tool, key, _, _ in TOOLS})
 ACTIONS.update({f"color_{i + 1}": str(i + 1) for i in range(len(COLORS))})
 # what the mouse does; [mouse] in the config file overrides ("right = menu")
 MOUSE_DEFAULTS = {"right": "copy", "double": "copy", "shift_double": "thumbnail", "middle": "menu"}
-MOUSE_ACTIONS = ("copy", "save", "close", "destroy", "menu", "reset", "reset_zoom", "thumbnail", "none")
+MOUSE_ACTIONS = ("copy", "save", "save_as", "close", "destroy", "menu", "reset", "reset_zoom", "thumbnail", "none")
 MOD_NAMES = {"ctrl": "CONTROL_MASK", "control": "CONTROL_MASK", "shift": "SHIFT_MASK",
              "alt": "ALT_MASK", "super": "SUPER_MASK", "win": "SUPER_MASK", "meta": "META_MASK"}
 KEY_ALIASES = {"esc": "Escape", "enter": "Return", "del": "Delete", "[": "bracketleft", "]": "bracketright",
@@ -594,6 +595,28 @@ def pick_filter(smooth, scale, base_scale):
     return cairo.FILTER_GOOD if smooth or scale <= base_scale * 1.001 else cairo.FILTER_NEAREST
 
 
+STATE_DIR = os.path.join(GLib.get_user_state_dir(), "snip-pin")
+
+
+def last_extension():
+    """The extension the Save As dialog used last (.png, .jpg or .webp)."""
+    try:
+        with open(os.path.join(STATE_DIR, "last-ext")) as f:
+            ext = f.read().strip()
+        return ext if ext in EXTENSIONS.values() else ".png"
+    except OSError:
+        return ".png"
+
+
+def remember_extension(ext):
+    try:
+        os.makedirs(STATE_DIR, exist_ok=True)
+        with open(os.path.join(STATE_DIR, "last-ext"), "w") as f:
+            f.write(ext)
+    except OSError:
+        pass
+
+
 def unique_path(folder, stem, ext):
     """folder/stem.ext, or stem_2.ext, stem_3.ext ... if that exists already."""
     p = os.path.join(folder, stem + ext)
@@ -793,8 +816,7 @@ def draw_op(cr, pixbuf, op, caret=False):
             cr.stroke()
     cr.restore()
 
-def render_png(pixbuf, ops, out_path):
-    """Bake pixbuf + ops into a PNG at native size."""
+def render_surface(pixbuf, ops):
     surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, pixbuf.get_width(), pixbuf.get_height())
     cr = cairo.Context(surf)
     Gdk.cairo_set_source_pixbuf(cr, pixbuf, 0, 0)
@@ -802,8 +824,64 @@ def render_png(pixbuf, ops, out_path):
     for op in ops:
         draw_op(cr, pixbuf, op)
     surf.flush()
-    surf.write_to_png(out_path)
+    return surf
+
+
+def render_png(pixbuf, ops, out_path):
+    """Bake pixbuf + ops into a PNG at native size."""
+    render_surface(pixbuf, ops).write_to_png(out_path)
     return out_path
+
+
+def render_pixbuf(pixbuf, ops):
+    """Bake pixbuf + ops into a new pixbuf (for JPEG and WebP output)."""
+    if not ops:
+        return pixbuf
+    surf = render_surface(pixbuf, ops)
+    return Gdk.pixbuf_get_from_surface(surf, 0, 0, surf.get_width(), surf.get_height())
+
+
+# ---- output files ----------------------------------------------------------
+FORMATS = {"png": "png", "jpg": "jpeg", "jpeg": "jpeg", "webp": "webp"}     # extension -> GdkPixbuf type
+EXTENSIONS = {"png": ".png", "jpeg": ".jpg", "webp": ".webp"}
+
+
+def file_pattern():
+    """strftime pattern for saved files (setting filename); no directory parts."""
+    p = CFG.get("filename", "pin_%Y%m%d_%H%M%S").strip()
+    return p if p and "/" not in p else "pin_%Y%m%d_%H%M%S"
+
+
+def save_format():
+    """GdkPixbuf type for quick save (setting format: png, jpg, webp)."""
+    return FORMATS.get(CFG.get("format", "png").strip().lower().lstrip("."), "png")
+
+
+def save_quality():
+    try:
+        return min(100, max(1, int(CFG.get("quality", "90"))))
+    except ValueError:
+        return 90
+
+
+def flatten(pb):
+    """An RGB copy of an RGBA pixbuf over white (JPEG has no alpha)."""
+    dest = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, False, 8, pb.get_width(), pb.get_height())
+    dest.fill(0xffffffff)
+    pb.composite(dest, 0, 0, pb.get_width(), pb.get_height(), 0, 0, 1.0, 1.0, GdkPixbuf.InterpType.NEAREST, 255)
+    return dest
+
+
+def write_image(pixbuf, ops, dest, fmt, quality=90):
+    """Bake and encode to dest as PNG, JPEG (flattened on white) or WebP."""
+    pb = render_pixbuf(pixbuf, ops)
+    if fmt == "jpeg" and pb.get_has_alpha():
+        pb = flatten(pb)
+    if fmt == "png":
+        pb.savev(dest, "png", [], [])
+    else:
+        pb.savev(dest, fmt, ["quality"], [str(quality)])
+    return dest
 
 _seq = 0
 
@@ -933,8 +1011,8 @@ class Pin(Gtk.ApplicationWindow):
         self.menu = Gtk.PopoverMenu.new_from_model(self.build_menu())
         self.menu.set_parent(self.area)
         self.menu.set_has_arrow(False)
-        for name in ("copy", "save", "reset", "close", "destroy", "undo", "redo", "click_through", "thumbnail",
-                     "rotate_cw", "rotate_ccw", "flip_h", "flip_v"):
+        for name in ("copy", "save", "save_as", "reset", "close", "destroy", "undo", "redo", "click_through",
+                     "thumbnail", "rotate_cw", "rotate_ccw", "flip_h", "flip_v"):
             act = Gio.SimpleAction.new(name, None)
             act.connect("activate", lambda *a, name=name: self.run_action(name))
             self.add_action(act)
@@ -1586,6 +1664,8 @@ class Pin(Gtk.ApplicationWindow):
             self.copy()
         elif action == "save":
             self.save()
+        elif action == "save_as":
+            self.save_as()
         elif action == "close":
             self.close()
         elif action == "destroy":
@@ -1712,6 +1792,7 @@ class Pin(Gtk.ApplicationWindow):
         m = Gio.Menu()
         m.append(f"Copy image & close\t{key_label('copy')}", "win.copy")
         m.append(f"Save to screenshots & close\t{key_label('save')}", "win.save")
+        m.append(f"Save as…\t{key_label('save_as')}", "win.save_as")
         edit = Gio.Menu()
         edit.append(f"Undo\t{key_label('undo')}", "win.undo")
         edit.append(f"Redo\t{key_label('redo')}", "win.redo")
@@ -1765,23 +1846,59 @@ class Pin(Gtk.ApplicationWindow):
         notify("Copied to clipboard")
         self.close()
 
+    def export_ops(self):
+        """The drawing ops to bake, the text being typed included."""
+        ops = [op for op in self.ops if op["kind"] not in MARKERS]
+        if self.typing is not None and self.typing["text"].strip():
+            ops.append(self.typing)
+        return ops
+
     def save(self, *a):
+        """Quick save: the screenshot folder, the file-name pattern, the configured format; then close."""
         folder = screenshot_folder()
-        path, temporary = self.export()
+        fmt = save_format()
         try:
             os.makedirs(folder, exist_ok=True)
-            dest = unique_path(folder, datetime.datetime.now().strftime("pin_%Y%m%d_%H%M%S"), ".png")
-            shutil.copyfile(path, dest)
-        except OSError as e:
-            # unwritable folder, full disk: keep the pin so nothing is lost
-            notify(f"Cannot save to {folder}: {e.strerror}", 3000)
+            dest = unique_path(folder, datetime.datetime.now().strftime(file_pattern()), EXTENSIONS[fmt])
+            write_image(self.pixbuf, self.export_ops(), dest, fmt, save_quality())
+        except (OSError, GLib.Error) as e:
+            # unwritable folder, full disk, missing encoder: keep the pin so nothing is lost
+            msg = getattr(e, "strerror", None) or getattr(e, "message", None) or str(e)
+            notify(f"Cannot save to {folder}: {msg}", 3000)
             print(f"pin-view: cannot save to {folder}: {e}", file=sys.stderr)
             return
-        finally:
-            if temporary:
-                os.unlink(path)
         notify(f"Saved {dest}")
         self.close()
+
+    def save_as(self, *a):
+        """A file dialog, preset with the folder, the pattern and the last used extension; the pin stays."""
+        dialog = Gtk.FileDialog()
+        folder = screenshot_folder()
+        if os.path.isdir(folder):
+            dialog.set_initial_folder(Gio.File.new_for_path(folder))
+        dialog.set_initial_name(datetime.datetime.now().strftime(file_pattern()) + last_extension())
+
+        def done(d, result):
+            try:
+                f = d.save_finish(result)
+            except GLib.Error:
+                return                                       # cancelled
+            dest = f.get_path()
+            if not dest:
+                return
+            ext = os.path.splitext(dest)[1].lower().lstrip(".")
+            fmt = FORMATS.get(ext)
+            if fmt is None:
+                fmt, dest = "png", dest + ".png"
+            try:
+                write_image(self.pixbuf, self.export_ops(), dest, fmt, save_quality())
+            except (OSError, GLib.Error) as e:
+                msg = getattr(e, "strerror", None) or getattr(e, "message", None) or str(e)
+                notify(f"Cannot save {os.path.basename(dest)}: {msg}", 3000)
+                return
+            remember_extension(EXTENSIONS[fmt])
+            notify(f"Saved {dest}")
+        dialog.save(self, None, done)
 
 def pins(app):
     return [w for w in app.get_windows() if isinstance(w, Pin)]

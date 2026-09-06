@@ -88,6 +88,10 @@ SEL_FILL=$(color_or SNIP_PIN_SEL_FILL '#00000000')         #        fill inside 
 SEL_SIZE=$(int_or SNIP_PIN_SEL_SIZE 1)                    #        1 = show the size while dragging
 CURSOR=$(int_or SNIP_PIN_CURSOR 0)                        # 1 = include the mouse cursor in the capture
 AREAS=$(int_or SNIP_PIN_AREAS 8)                          # how many capture areas `repeat` remembers
+FILENAME="${SNIP_PIN_FILENAME:-}"                         # strftime pattern for saved files
+[[ -n "$FILENAME" && "$FILENAME" != */* ]] || FILENAME='pin_%Y%m%d_%H%M%S'
+case "${SNIP_PIN_FORMAT:-png}" in jpg|jpeg|.jpg|.jpeg) FORMAT=jpeg; EXT=jpg ;; webp|.webp) FORMAT=webp; EXT=webp ;; *) FORMAT=png; EXT=png ;; esac
+QUALITY=$(int_or SNIP_PIN_QUALITY 90)
 # what a capture ends with: any combination of copy, save and pin joined by +
 if [[ "${SNIP_PIN_ACTION:-}" =~ ^(copy|save|pin)(\+(copy|save|pin))*$ ]]; then ACTION=$SNIP_PIN_ACTION; else ACTION="copy+pin"; fi
 MODE=$ACTION
@@ -129,9 +133,27 @@ quick_save() {
     local dir=${2:-} dest n=2
     [[ -n "$dir" ]] || dir=$(save_dir)
     mkdir -p "$dir" || return 1
-    dest="$dir/pin_$(date +%Y%m%d_%H%M%S).png"
-    while [[ -e "$dest" ]]; do dest="${dest%.png}_$n.png"; dest="${dest/_$((n - 1))_$n.png/_$n.png}"; n=$((n + 1)); done
-    cp "$1" "$dest" || return 1
+    local stem; stem="$dir/$(date +"$FILENAME")"
+    dest="$stem.$EXT"
+    while [[ -e "$dest" ]]; do dest="${stem}_$n.$EXT"; n=$((n + 1)); done
+    if [[ "$FORMAT" == png ]]; then
+        cp "$1" "$dest" || return 1
+    else
+        python3 - "$1" "$dest" "$FORMAT" "$QUALITY" <<'PY' || return 1
+import sys, warnings
+warnings.filterwarnings("ignore")
+import gi
+gi.require_version("GdkPixbuf", "2.0")
+from gi.repository import GdkPixbuf
+pb = GdkPixbuf.Pixbuf.new_from_file(sys.argv[1])
+if sys.argv[3] == "jpeg" and pb.get_has_alpha():          # JPEG has no alpha: flatten on white
+    flat = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, False, 8, pb.get_width(), pb.get_height())
+    flat.fill(0xffffffff)
+    pb.composite(flat, 0, 0, pb.get_width(), pb.get_height(), 0, 0, 1.0, 1.0, GdkPixbuf.InterpType.NEAREST, 255)
+    pb = flat
+pb.savev(sys.argv[2], sys.argv[3], ["quality"], [sys.argv[4]])
+PY
+    fi
     echo "$dest"
 }
 
@@ -314,6 +336,9 @@ PY
         show opacity 100
         show alpha_bg transparent
         show thumb_size 75
+        show filename 'pin_%Y%m%d_%H%M%S'
+        show format png
+        show quality 90
         exit 0 ;;
     --version|-V)
         cat "$HERE/VERSION"; exit 0 ;;
