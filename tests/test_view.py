@@ -379,3 +379,13 @@ def test_key_label(view, monkeypatch):
     assert view.key_label("cancel") == "Esc"
     assert view.key_label("width_down") == "["
     assert view.key_label("close") == ""
+
+
+def test_default_tool_setting(view, monkeypatch, capsys):
+    monkeypatch.setenv("SNIP_PIN_DEFAULT_TOOL", "arrow")
+    assert view.default_tool() == "arrow"
+    monkeypatch.setenv("SNIP_PIN_DEFAULT_TOOL", "None")
+    assert view.default_tool() is None
+    monkeypatch.setenv("SNIP_PIN_DEFAULT_TOOL", "lasso")
+    assert view.default_tool() is None and view.default_tool() is None
+    assert capsys.readouterr().err.count("unknown tool") == 1               # warned once, not per pin

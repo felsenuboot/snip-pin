@@ -297,6 +297,7 @@ PY
         show areas 8
         show action copy+pin
         show autosave_dir ''
+        show default_tool none
         exit 0 ;;
     --version|-V)
         cat "$HERE/VERSION"; exit 0 ;;

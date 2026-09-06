@@ -17,6 +17,7 @@ layout) may still change.
 - `snip-pin.sh repeat [N]` captures the area of the N-th last snip again without a selection; the last `areas` (default 8) regions are remembered in the cache (#76).
 - `snip-pin.sh copy` and `snip-pin.sh save` select and copy or save without pinning; `action` in the config sets what the bare command does (`copy`, `save`, `pin` joined by `+`, default `copy+pin`) (#77).
 - `autosave_dir`: every capture is also saved to that folder (raw, without annotations), whatever happens to the pin afterwards (#82).
+- `default_tool`: the annotation tool that is active as soon as a pin opens (#78).
 
 ## [0.3.0] – 2026-09-06
 

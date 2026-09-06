@@ -162,6 +162,22 @@ class Config:
 CFG = Config()
 
 
+def default_tool():
+    """The tool a new pin starts with (default_tool), or None; unknown names are reported once."""
+    name = CFG.get("default_tool", "none").strip().lower()
+    if name in ("", "none"):
+        return None
+    if name in {t for t, _, _, _ in TOOLS}:
+        return name
+    if name not in _warned:
+        _warned.add(name)
+        print(f"pin-view: config default_tool = {name}: unknown tool", file=sys.stderr)
+    return None
+
+
+_warned = set()
+
+
 def border_color():
     c = CFG.get("border", DEFAULT_BORDER_COLOR).strip()
     if len(c) in (7, 9) and c.startswith("#") and all(ch in "0123456789abcdefABCDEF" for ch in c[1:]):
@@ -673,6 +689,8 @@ class Pin(Gtk.ApplicationWindow):
         self.set_child(self.area)
         self.toolbar = self.build_toolbar()
         self.apply_scale()
+        if default_tool() is not None:
+            self.set_tool(default_tool())
 
         # Start the compositor move only after the pointer really moved: handing
         # the pointer to Hyprland on the first press would swallow double-clicks.
