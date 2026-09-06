@@ -226,3 +226,11 @@ msgstr "Jeder Snip, der nicht behalten wird (★), wird gelöscht."
 
 msgid "Clear"
 msgstr "Leeren"
+msgid "Tilt right 1°"
+msgstr "1° nach rechts neigen"
+
+msgid "Tilt left 1°"
+msgstr "1° nach links neigen"
+
+msgid "upright"
+msgstr "gerade"

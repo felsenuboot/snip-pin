@@ -6,6 +6,7 @@ usage: pin-view.py IMAGE [X Y]
   drag           move            wheel             zoom (10% steps)
   Ctrl+wheel     opacity         Ctrl+0            reset (zoom, opacity, rotation)
   Ctrl+R / Ctrl+Shift+R  rotate   Ctrl+H / Ctrl+J   flip   Ctrl+1  reset opacity
+  Alt+wheel / Alt+drag   tilt by any angle   Ctrl+, / Ctrl+.  tilt 1° (Shift: 5°)
   Ctrl+C         copy image & close        Ctrl+S    save to screenshot folder & close
   Ctrl+Shift+S   save as (dialog; PNG, JPEG or WebP by extension), the pin stays
   Ctrl+P         print (GTK's dialog, also print to PDF), the pin stays
@@ -488,6 +489,7 @@ window.snip-pin {{
 }}
 window.snip-pin.editing {{ border-color: {EDIT_COLOR}; }}
 window.snip-pin.ghost {{ border-style: dashed; }}          /* click-through: the mouse goes to what is below */
+window.snip-pin.tilted {{ border-color: transparent; box-shadow: none; }}   /* tilted: the border is drawn in draw() */
 .snip-toolbar button {{ padding: 2px 7px; min-height: 22px; min-width: 0; }}
 .snip-toolbar .swatch {{ min-width: 14px; min-height: 14px; padding: 0; margin: 4px 1px;
                          border-radius: 9px; border: 1px solid rgba(0,0,0,0.5); }}
@@ -557,6 +559,8 @@ ACTIONS = {
     "undo": "ctrl+z", "redo": "ctrl+shift+z ctrl+y",
     "reset": "ctrl+0", "reset_zoom": "", "reset_opacity": "ctrl+1", "click_through": "ctrl+t",
     "rotate_cw": "ctrl+r", "rotate_ccw": "ctrl+shift+r", "flip_h": "ctrl+h", "flip_v": "ctrl+j", "smooth": "",
+    "tilt_cw": "ctrl+period", "tilt_ccw": "ctrl+comma",
+    "tilt_cw_5": "ctrl+shift+period", "tilt_ccw_5": "ctrl+shift+comma",
     "thumbnail": "ctrl+m shift+Return",
     "width_down": "bracketleft", "width_up": "bracketright", "menu": "F10",
 }
@@ -865,6 +869,52 @@ def zoom_shift(pointer, img_pt, new_scale):
     """How far the window must move so that img_pt (image coordinates) stays
     under the pointer (widget coordinates) after the image is drawn at new_scale."""
     return (round(pointer[0] - img_pt[0] * new_scale), round(pointer[1] - img_pt[1] * new_scale))
+
+
+def rotated_bbox(w, h, angle):
+    """Size of the box around a w x h rectangle turned by angle degrees."""
+    a = math.radians(angle)
+    bw = abs(w * math.cos(a)) + abs(h * math.sin(a))
+    bh = abs(w * math.sin(a)) + abs(h * math.cos(a))
+    return round(bw, 6), round(bh, 6)
+
+
+def unrotate_point(x, y, box_w, box_h, w, h, angle):
+    """A point in the (box_w x box_h) window of a rectangle turned by angle -> its
+    position in the unturned w x h rectangle (both share the centre)."""
+    a = math.radians(-angle)
+    dx, dy = x - box_w / 2, y - box_h / 2
+    return (dx * math.cos(a) - dy * math.sin(a) + w / 2, dx * math.sin(a) + dy * math.cos(a) + h / 2)
+
+
+def snap_angle(angle, snap=3.0):
+    """Angles within `snap` degrees of a right angle snap to it; 0 <= result < 360."""
+    angle %= 360
+    for q in (0, 90, 180, 270, 360):
+        if abs(angle - q) <= snap:
+            return q % 360
+    return angle
+
+
+def rotated_region(w, h, angle, box_w, box_h):
+    """cairo.Region approximating the turned rectangle inside its box as row strips."""
+    a = math.radians(angle)
+    cx, cy = box_w / 2, box_h / 2
+    corners = [(-w / 2, -h / 2), (w / 2, -h / 2), (w / 2, h / 2), (-w / 2, h / 2)]
+    pts = [(cx + x * math.cos(a) - y * math.sin(a), cy + x * math.sin(a) + y * math.cos(a)) for x, y in corners]
+    region = cairo.Region()
+    rows = int(math.ceil(box_h))
+    for row in range(rows):
+        yc = row + 0.5
+        xs = []
+        for (x1, y1), (x2, y2) in zip(pts, pts[1:] + pts[:1]):
+            if (y1 <= yc < y2) or (y2 <= yc < y1):
+                xs.append(x1 + (yc - y1) * (x2 - x1) / (y2 - y1))
+        if len(xs) >= 2:
+            x_from, x_to = int(math.floor(min(xs))), int(math.ceil(max(xs)))
+            if x_to > x_from:
+                region.union(cairo.RectangleInt(max(0, x_from), row, x_to - x_from, 1))
+    return region
 
 
 def pick_filter(smooth, scale, base_scale):
@@ -1350,6 +1400,23 @@ def render_png(pixbuf, ops, out_path):
     return out_path
 
 
+def render_tilted_png(pixbuf, ops, angle, out_path):
+    """The image with its annotations turned by angle degrees, on a transparent canvas of the turned size."""
+    iw, ih = pixbuf.get_width(), pixbuf.get_height()
+    bw, bh = rotated_bbox(iw, ih, angle)
+    surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, max(1, math.ceil(bw)), max(1, math.ceil(bh)))
+    cr = cairo.Context(surf)
+    cr.translate(surf.get_width() / 2, surf.get_height() / 2)
+    cr.rotate(math.radians(angle))
+    cr.translate(-iw / 2, -ih / 2)
+    cr.set_source_surface(render_surface(pixbuf, ops), 0, 0)
+    cr.get_source().set_filter(cairo.FILTER_BEST)
+    cr.paint()
+    surf.flush()
+    surf.write_to_png(out_path)
+    return out_path
+
+
 def render_pixbuf(pixbuf, ops):
     """Bake pixbuf + ops into a new pixbuf (for JPEG and WebP output)."""
     if not ops:
@@ -1445,6 +1512,8 @@ class Pin(Gtk.ApplicationWindow):
         self.selected = None          # index in ops of the annotation being edited (no tool active)
         self.drag_op = None           # (index, dx, dy so far) while an annotation is dragged
         self.turns = 0                # net quarter turns clockwise, flips: for "reset"
+        self.angle = 0.0              # free rotation in degrees (the window is the turned image's box)
+        self.rot_drag = None          # (start angle, start pointer angle) while Alt-dragging
         self.flipped = {"h": False, "v": False}
         self.address = None           # Hyprland window address once known (placement, crop)
         self._syncing = False
@@ -1475,6 +1544,9 @@ class Pin(Gtk.ApplicationWindow):
             self.ops = ops_from_json(state.get("ops", []))
             self.scale = max(self.min_scale(), min(float(state.get("scale", self.scale)), MAX_SCALE))
             self.opacity = min(1.0, max(0.1, float(state.get("opacity", 1.0))))
+            self.angle = float(state.get("angle", 0.0)) % 360
+            if self.angle:
+                self.add_css_class("tilted")
         self.set_opacity(self.opacity)
         self.apply_scale()
         if default_tool() is not None:
@@ -1533,6 +1605,7 @@ class Pin(Gtk.ApplicationWindow):
         self.menu.set_has_arrow(False)
         for name in ("copy", "save", "save_as", "print", "ocr", "open_with", "reset", "close", "destroy",
                      "undo", "redo", "click_through", "thumbnail", "rotate_cw", "rotate_ccw", "flip_h", "flip_v",
+                     "tilt_cw", "tilt_ccw",
                      *[f"command_{i}" for i in range(1, 10)]):
             act = Gio.SimpleAction.new(name, None)
             act.connect("activate", lambda *a, name=name: self.run_action(name))
@@ -1557,6 +1630,9 @@ class Pin(Gtk.ApplicationWindow):
         vx0, vy0, vw, vh = self.view()
         w = max(1, round(vw * self.scale))
         h = max(1, round(vh * self.scale))
+        if self.angle:
+            bw, bh = rotated_bbox(w, h, self.angle)
+            w, h = max(1, math.ceil(bw)), max(1, math.ceil(bh))
         self.area.set_content_width(w)
         self.area.set_content_height(h)
         self.set_default_size(w, h)
@@ -1601,10 +1677,18 @@ class Pin(Gtk.ApplicationWindow):
         self.scale = max(self.min_scale(), min(s, MAX_SCALE))
         self.apply_scale()
 
+    def content_size(self):
+        """The unturned content size in widget pixels."""
+        _vx, _vy, vw, vh = self.view()
+        return vw * self.scale, vh * self.scale
+
     def to_img(self, x, y):
-        """Widget coordinates -> image coordinates."""
+        """Widget coordinates -> image coordinates (through the rotation, if any)."""
         x0, y0, vw, vh = self.view()
-        return (x0 + x * vw / self.area.get_width(), y0 + y * vh / self.area.get_height())
+        cw, ch = self.content_size()
+        if self.angle:
+            x, y = unrotate_point(x, y, self.area.get_width(), self.area.get_height(), cw, ch, self.angle)
+        return (x0 + x * vw / cw, y0 + y * vh / ch)
 
     def draw(self, area, cr, w, h):
         if self.ghost:
@@ -1616,7 +1700,14 @@ class Pin(Gtk.ApplicationWindow):
                 cr.set_source_rgb(*hex_to_rgb(self.alpha_bg))
             cr.paint()
         x0, y0, vw, vh = self.view()
-        cr.scale(w / vw, h / vh)
+        cw, ch = self.content_size()
+        if self.angle:
+            self.apply_input_region()
+            cr.translate(w / 2, h / 2)
+            cr.rotate(math.radians(self.angle))
+            cr.translate(-cw / 2, -ch / 2)
+        cr.save()
+        cr.scale(cw / vw, ch / vh)
         cr.translate(-x0, -y0)
         cr.rectangle(x0, y0, vw, vh)
         cr.clip()
@@ -1636,6 +1727,12 @@ class Pin(Gtk.ApplicationWindow):
             self.draw_crop(cr, rect)
         if self.selected is not None and self.selected < len(self.ops):
             self.draw_selection(cr, self.ops[self.selected])
+        cr.restore()
+        if self.angle:                          # the CSS border frames the box; draw ours along the image
+            cr.set_source_rgb(*hex_to_rgb(EDIT_COLOR if self.tool else border_color()))
+            cr.set_line_width(BORDER)
+            cr.rectangle(BORDER / 2, BORDER / 2, cw - BORDER, ch - BORDER)
+            cr.stroke()
         if self.osd is not None:
             self.draw_osd(cr, w, h)
 
@@ -1752,7 +1849,7 @@ class Pin(Gtk.ApplicationWindow):
             stem = os.path.join(CLOSED_DIR, datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f"))
             self.pixbuf.savev(stem + ".png", "png", [], [])
             scale = self.thumb["scale"] if self.thumb is not None else self.scale
-            state = {"path": self.path, "pos": list(pos) if pos else None, "scale": scale,
+            state = {"path": self.path, "pos": list(pos) if pos else None, "scale": scale, "angle": self.angle,
                      "base_scale": self.base_scale, "opacity": self.opacity, "ops": ops_to_json(self.ops)}
             with open(stem + ".json", "w") as f:
                 json.dump(state, f)
@@ -1796,6 +1893,9 @@ class Pin(Gtk.ApplicationWindow):
             return
         if self.ghost:
             surface.set_input_region(cairo.Region())
+        elif self.angle:
+            cw, ch = self.content_size()
+            surface.set_input_region(rotated_region(cw, ch, self.angle, surface.get_width(), surface.get_height()))
         else:
             surface.set_input_region(cairo.Region(cairo.RectangleInt(0, 0, surface.get_width(), surface.get_height())))
 
@@ -2034,8 +2134,32 @@ class Pin(Gtk.ApplicationWindow):
             new_w, new_h = round(self.iw * self.scale), round(self.ih * self.scale)
             self.move_to(c["at"][0] + (old_w - new_w) // 2, c["at"][1] + (old_h - new_h) // 2)
 
+    def set_angle(self, angle, snap=True):
+        """Free rotation about the centre; the window becomes the turned image's box."""
+        angle = snap_angle(angle) if snap else angle % 360
+        if angle == self.angle:
+            return
+        c = self.client() if self.address else None
+        old_w, old_h = self.area.get_width(), self.area.get_height()
+        self.angle = angle
+        if angle:
+            self.add_css_class("tilted")
+        else:
+            self.remove_css_class("tilted")
+        self.apply_scale()
+        if c is not None:
+            cw, ch = self.content_size()
+            bw, bh = rotated_bbox(cw, ch, angle) if angle else (cw, ch)
+            self.move_to(c["at"][0] + (old_w - round(bw)) // 2, c["at"][1] + (old_h - round(bh)) // 2)
+        self.apply_input_region()
+        self.show_osd(f"{angle:.0f}°" if angle else _("upright"))
+
+    def tilt(self, delta):
+        self.set_angle(self.angle + delta)
+
     def reset_image(self):
         """Back to 100 %, opaque, unrotated, unflipped (each step undoable)."""
+        self.set_angle(0)
         if self.flipped["h"]:
             self.transform("flip", "h")
         if self.flipped["v"]:
@@ -2250,6 +2374,12 @@ class Pin(Gtk.ApplicationWindow):
     def on_drag_begin(self, gesture, x, y):
         self.moving = False
         self.drag_op = None
+        self.rot_drag = None
+        if gesture.get_current_event_state() & Gdk.ModifierType.ALT_MASK and self.thumb is None:
+            # Alt+drag: turn the pin about its centre, following the pointer's angle
+            cx, cy = self.area.get_width() / 2, self.area.get_height() / 2
+            self.rot_drag = (self.angle, math.degrees(math.atan2(y - cy, x - cx)))
+            return
         if self.tool is None and self.thumb is None and self.ops:
             p = self.to_img(x, y)
             i = find_op(self.ops, p, 6 / (self.area.get_width() / self.iw or 1))
@@ -2265,6 +2395,12 @@ class Pin(Gtk.ApplicationWindow):
         self.area.queue_draw()
 
     def on_drag_update(self, gesture, dx, dy):
+        if self.rot_drag is not None:
+            _ok, sx, sy = gesture.get_start_point()
+            cx, cy = self.area.get_width() / 2, self.area.get_height() / 2
+            now = math.degrees(math.atan2(sy + dy - cy, sx + dx - cx))
+            self.set_angle(self.rot_drag[0] + now - self.rot_drag[1])
+            return
         if self.drag_op is not None:
             i, done_x, done_y = self.drag_op
             f = self.iw / (self.area.get_width() or 1)
@@ -2296,6 +2432,9 @@ class Pin(Gtk.ApplicationWindow):
             surface.begin_move(gesture.get_device(), 1, sx + dx, sy + dy, gesture.get_current_event_time())
 
     def on_drag_end(self, gesture, dx, dy):
+        if self.rot_drag is not None:
+            self.rot_drag = None
+            return
         if self.drag_op is not None:
             self.end_op_drag()
             return
@@ -2389,6 +2528,9 @@ class Pin(Gtk.ApplicationWindow):
             self.transform("flip", action[-1])
         elif action == "smooth":
             self.set_smooth(not self.smooth)
+        elif action.startswith("tilt_"):
+            step = 5 if action.endswith("_5") else 1
+            self.tilt(step if "_cw" in action else -step)
         elif action == "thumbnail":
             self.toggle_thumbnail()
         elif action == "reset_opacity":
@@ -2436,8 +2578,11 @@ class Pin(Gtk.ApplicationWindow):
         steps, self.scroll_acc = scroll_steps(ctrl.get_unit() == Gdk.ScrollUnit.WHEEL, dy, self.scroll_acc)
         if steps == 0 or self.thumb is not None:
             return True
-        ctrl_held = ctrl.get_current_event_state() & Gdk.ModifierType.CONTROL_MASK
-        if ctrl_held:
+        state = ctrl.get_current_event_state()
+        ctrl_held = state & Gdk.ModifierType.CONTROL_MASK
+        if state & Gdk.ModifierType.ALT_MASK:
+            self.tilt((5 if state & Gdk.ModifierType.SHIFT_MASK else 1) * steps)
+        elif ctrl_held:
             self.opacity = min(1.0, max(0.1, self.opacity - 0.1 * steps))
             self.set_opacity(self.opacity)
             self.show_osd(f"{round(self.opacity * 100)} %")
@@ -2450,7 +2595,8 @@ class Pin(Gtk.ApplicationWindow):
         the window moves by the difference, which on Hyprland means a move request
         held through the resize like a crop's."""
         new_scale = max(self.min_scale(), min(new_scale, MAX_SCALE))
-        c = self.client() if self.zoom_at_pointer and self.pointer is not None and self.address else None
+        anchored = self.zoom_at_pointer and self.pointer is not None and self.address and not self.angle
+        c = self.client() if anchored else None
         if c is not None:
             img_pt = self.to_img(*self.pointer)
             dx, dy = zoom_shift(self.pointer, img_pt, new_scale)
@@ -2521,6 +2667,8 @@ class Pin(Gtk.ApplicationWindow):
         tr.append(_("Rotate left") + f"\t{key_label('rotate_ccw')}", "win.rotate_ccw")
         tr.append(_("Flip horizontally") + f"\t{key_label('flip_h')}", "win.flip_h")
         tr.append(_("Flip vertically") + f"\t{key_label('flip_v')}", "win.flip_v")
+        tr.append(_("Tilt right 1°") + f"\t{key_label('tilt_cw')}", "win.tilt_cw")
+        tr.append(_("Tilt left 1°") + f"\t{key_label('tilt_ccw')}", "win.tilt_ccw")
         m.append_section(None, tr)
         tail = Gio.Menu()
         tail.append(_("Thumbnail") + f"\t{key_label('thumbnail')}", "win.thumbnail")
@@ -2550,6 +2698,11 @@ class Pin(Gtk.ApplicationWindow):
         cropped = any(op["kind"] in MARKERS for op in self.ops)        # the pixels differ from the file
         if self.typing is not None and self.typing["text"].strip():
             ops.append(self.typing)
+        if self.angle and CFG.get("rotate_export", "view").strip().lower() != "original":
+            fd, tmp = tempfile.mkstemp(prefix="snip-pin-", suffix=".png", dir=RUNTIME_DIR)
+            os.close(fd)
+            render_tilted_png(self.pixbuf, ops, self.angle, tmp)
+            return tmp, True
         # the clipboard and the save folder always get PNG: a JPEG opened via
         # "pin FILE" must be re-encoded even without annotations
         if not ops and not cropped and self.path.lower().endswith(".png"):
