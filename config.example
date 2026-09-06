@@ -12,6 +12,7 @@ filename = pin_%Y%m%d_%H%M%S  # strftime pattern for saved files (quick save, Sa
 format = png                  # quick save and autosave: png, jpg or webp
 quality = 90                  # JPEG / WebP quality, 1-100
 copy_file = always            # a copied pin is offered as a file (text/uri-list) as well as image/png; never = PNG only
+sound = off                   # on copy and save: off, default (the sound theme's screen-capture), or a sound file
 elements_budget_ms = 150      # time the element detector may spend joining edges
 
 # the selection (slurp): outline colour and width, the dim over the rest of the

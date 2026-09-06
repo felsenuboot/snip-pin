@@ -463,6 +463,47 @@ def notify(msg, ms=1500):
     except OSError:
         pass
 
+# ---- sound -------------------------------------------------------------------
+CANBERRA = shutil.which("canberra-gtk-play")
+THEME_SOUNDS = ["/usr/share/sounds/freedesktop/stereo/screen-capture.oga",
+                "/usr/share/sounds/freedesktop/stereo/camera-shutter.oga"]
+
+
+def sound_command(setting, canberra=CANBERRA):
+    """argv that plays the configured sound, or None: `sound = default` plays the
+    theme's screen-capture event, a path plays that file, anything else is off."""
+    v = (setting or "").strip()
+    if v.lower() in ("", "0", "off", "no", "false", "none"):
+        return None
+    if canberra:
+        return [canberra, "-i", "screen-capture"] if v == "default" else [canberra, "-f", os.path.expanduser(v)]
+    return None
+
+
+_media = []
+
+
+def play_sound():
+    """Copy / save feedback: canberra-gtk-play when installed, else GTK's own player."""
+    setting = CFG.get("sound", "")
+    argv = sound_command(setting)
+    try:
+        if argv:
+            subprocess.Popen(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return
+        v = setting.strip()
+        if v.lower() in ("", "0", "off", "no", "false", "none"):
+            return
+        path = next((p for p in THEME_SOUNDS if os.path.exists(p)), None) if v == "default" else os.path.expanduser(v)
+        if path and os.path.exists(path):
+            media = Gtk.MediaFile.new_for_filename(path)
+            _media.append(media)                                  # keep it alive while it plays
+            media.connect("notify::ended", lambda m, p: _media.remove(m) if m in _media else None)
+            media.play()
+    except (OSError, GLib.Error) as e:
+        print(f"pin-view: sound: {e}", file=sys.stderr)
+
+
 def scroll_steps(wheel, dy, acc):
     """(steps, new_acc): a wheel notch is one step; smooth deltas accumulate, one step per SMOOTH_STEP."""
     if wheel:
@@ -1921,6 +1962,7 @@ class Pin(Gtk.ApplicationWindow):
             if temporary:
                 os.unlink(path)
         notify("Copied to clipboard")
+        play_sound()
         self.close()
 
     def export_ops(self):
@@ -1945,6 +1987,7 @@ class Pin(Gtk.ApplicationWindow):
             print(f"pin-view: cannot save to {folder}: {e}", file=sys.stderr)
             return
         notify(f"Saved {dest}")
+        play_sound()
         self.close()
 
     def print_pin(self, *a, export_to=None):
@@ -2008,6 +2051,7 @@ class Pin(Gtk.ApplicationWindow):
                 return
             remember_extension(EXTENSIONS[fmt])
             notify(f"Saved {dest}")
+            play_sound()
         dialog.save(self, None, done)
 
 def pins(app):

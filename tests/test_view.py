@@ -552,3 +552,11 @@ def test_clipboard_settings_and_paths(view, monkeypatch):
 
 def test_print_action_is_registered(view):
     assert view.ACTIONS["print"] == "ctrl+p" and "print" in view.MOUSE_ACTIONS
+
+
+def test_sound_command(view):
+    assert view.sound_command("", "/usr/bin/cgp") is None
+    assert view.sound_command("off", "/usr/bin/cgp") is None
+    assert view.sound_command("default", "/usr/bin/cgp") == ["/usr/bin/cgp", "-i", "screen-capture"]
+    assert view.sound_command("~/x.oga", "/usr/bin/cgp") == ["/usr/bin/cgp", "-f", os.path.expanduser("~/x.oga")]
+    assert view.sound_command("default", None) is None                  # GTK's player takes over

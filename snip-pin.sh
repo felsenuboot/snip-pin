@@ -102,6 +102,22 @@ mkdir -p "$CACHE/kept" "$STATE"
 find "$CACHE" -maxdepth 2 -name '*_annotated.png' -delete 2>/dev/null
 
 notify() { command -v notify-send >/dev/null && notify-send -i camera-photo-symbolic -t 2000 "Snip" "$1"; }
+# `sound = default` plays the theme's screen-capture event, a path plays that file (copy / save without a pin)
+play_sound() {
+    local v="${SNIP_PIN_SOUND:-}"
+    case "${v,,}" in ""|0|off|no|false|none) return 0 ;; esac
+    if command -v canberra-gtk-play >/dev/null; then
+        if [[ "$v" == default ]]; then canberra-gtk-play -i screen-capture >/dev/null 2>&1 &
+        else canberra-gtk-play -f "${v/#\~/$HOME}" >/dev/null 2>&1 & fi
+    else
+        local player
+        player=$(command -v pw-play || command -v paplay) || return 0
+        [[ "$v" == default ]] && v=/usr/share/sounds/freedesktop/stereo/screen-capture.oga
+        v="${v/#\~/$HOME}"
+        [[ -r "$v" ]] && "$player" "$v" >/dev/null 2>&1 &
+    fi
+    return 0
+}
 
 # End our own slurp (its PID is in the state file), never somebody else's.
 abort_selection() {
@@ -340,6 +356,7 @@ PY
         show format png
         show quality 90
         show copy_file always
+        show sound off
         exit 0 ;;
     --version|-V)
         cat "$HERE/VERSION"; exit 0 ;;
@@ -434,10 +451,10 @@ if [[ -n "${SNIP_PIN_AUTOSAVE_DIR:-}" ]]; then
 fi
 if [[ "$MODE" == *copy* ]]; then
     wl-copy --type image/png < "$file"
-    [[ "$MODE" == *pin* ]] || notify "Copied to clipboard"
+    [[ "$MODE" == *pin* ]] || { notify "Copied to clipboard"; play_sound; }
 fi
 if [[ "$MODE" == *save* ]]; then
-    if dest=$(quick_save "$file"); then notify "Saved $dest"; else notify "Cannot save to $(save_dir)"; fi
+    if dest=$(quick_save "$file"); then notify "Saved $dest"; play_sound; else notify "Cannot save to $(save_dir)"; fi
 fi
 [[ "$MODE" == *pin* ]] && pin_file "$file"
 exit 0

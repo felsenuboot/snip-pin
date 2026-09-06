@@ -521,3 +521,24 @@ def test_save_mode_honours_filename_and_format(tmp_path):
     assert run(["save"], env).returncode == 0
     year = time.strftime("%Y")
     assert sorted(os.listdir(tmp_path / "out")) == [f"shot_{year}.png", f"shot_{year}_2.png"]
+
+
+def test_sound_plays_on_copy_mode(tmp_path):
+    env = make_env(tmp_path, tmp_path / "viewer.log")
+    b, log = fake_tools(tmp_path)
+    (b / "canberra-gtk-play").write_text(f'#!/bin/sh\necho "canberra-gtk-play $*" >> "{log}"\n')
+    (b / "canberra-gtk-play").chmod(0o755)
+    env["PATH"] = f"{b}:{env['PATH']}"
+    env["SNIP_NO_ELEMENTS"] = "1"
+    env["SNIP_GEOM"] = "10x10+0+0"
+    assert run(["copy"], env).returncode == 0
+    time.sleep(0.3)
+    assert "canberra-gtk-play" not in log.read_text()               # off by default
+    env["SNIP_PIN_SOUND"] = "default"
+    assert run(["copy"], env).returncode == 0
+    time.sleep(0.3)
+    assert "canberra-gtk-play -i screen-capture" in log.read_text()
+    env["SNIP_PIN_SOUND"] = "~/ding.oga"
+    assert run(["copy"], env).returncode == 0
+    time.sleep(0.3)
+    assert f"canberra-gtk-play -f {tmp_path}/ding.oga" in log.read_text()
