@@ -7,7 +7,8 @@ usage: pin-view.py IMAGE [X Y]
   Ctrl+wheel     opacity         Ctrl+0            reset (zoom, opacity, rotation)
   Ctrl+R / Ctrl+Shift+R  rotate   Ctrl+H / Ctrl+J   flip   Ctrl+1  reset opacity
   Ctrl+C         copy image & close        Ctrl+S    save to screenshot folder & close
-  dbl-click      copy image & close        Esc       close without copying
+  dbl-click      copy image & close        Esc       close (snip-pin.sh reopen brings it back)
+  Shift+Esc      destroy: close for good
   right-click    copy image & close        middle-click  menu
 
 Annotations (toolbar under the pin while the pointer hovers it, or keys):
@@ -65,13 +66,13 @@ def hand_over(args):
         s.close()
 
 
-COMMANDS = ("--toggle", "--close-all", "--click-through")   # requests that address the running pins, not a file
+COMMANDS = ("--toggle", "--close-all", "--click-through", "--reopen")   # requests to the running pins, not a file
 
 if __name__ == "__main__" and len(sys.argv) >= 2:
     if sys.argv[1] in COMMANDS:
-        hand_over(sys.argv[1:2])               # no viewer: no pins to act on, nothing to start
-        sys.exit(0)
-    if hand_over([os.path.abspath(sys.argv[1])] + sys.argv[2:]):
+        if hand_over(sys.argv[1:2]) or sys.argv[1] != "--reopen":
+            sys.exit(0)                        # no viewer: no pins to act on; only --reopen starts one
+    elif hand_over([os.path.abspath(sys.argv[1])] + sys.argv[2:]):
         sys.exit(0)
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -192,6 +193,66 @@ def border_color():
         return c
     return DEFAULT_BORDER_COLOR
 
+# ---- closed pins ----------------------------------------------------------
+# A closed pin is written to $XDG_RUNTIME_DIR/snip-pin/closed as the current
+# image (crop and rotation baked in) plus a JSON file with position, zoom,
+# opacity and the drawing annotations, so `snip-pin.sh reopen` brings it back
+# as it was, even after the viewer process has ended with its last pin.
+CLOSED_DIR = os.path.join(RUNTIME_DIR, "snip-pin", "closed")
+
+
+def reopen_limit():
+    try:
+        return max(0, int(CFG.get("reopen", "5")))
+    except ValueError:
+        return 5
+
+
+def ops_to_json(ops):
+    """Drawing ops only, plain JSON types."""
+    out = []
+    for op in ops:
+        if op["kind"] in MARKERS:
+            continue
+        o = {k: v for k, v in op.items() if not k.startswith("_")}
+        o["pts"] = [[float(x), float(y)] for x, y in op["pts"]]
+        o["color"] = list(op["color"])
+        out.append(o)
+    return out
+
+
+def ops_from_json(data):
+    ops = []
+    for o in data:
+        if not isinstance(o, dict) or "kind" not in o or "pts" not in o:
+            continue
+        op = dict(o)
+        op["pts"] = [(float(x), float(y)) for x, y in o["pts"]]
+        op["color"] = tuple(o.get("color", (1, 0, 0)))
+        op.setdefault("width", 4)
+        op.setdefault("text", "")
+        ops.append(op)
+    return ops
+
+
+def closed_entries():
+    """Stored closed pins, newest first: (json path, png path)."""
+    try:
+        names = sorted(n[:-5] for n in os.listdir(CLOSED_DIR) if n.endswith(".json"))
+    except OSError:
+        return []
+    return [(os.path.join(CLOSED_DIR, n + ".json"), os.path.join(CLOSED_DIR, n + ".png")) for n in reversed(names)]
+
+
+def prune_closed(limit):
+    for j, png in closed_entries()[limit:]:
+        for f in (j, png):
+            try:
+                os.unlink(f)
+            except OSError:
+                pass
+
+
 # ---- annotation presets --------------------------------------------------
 COLORS = [("red", "#e5312b"), ("orange", "#ff8c1a"), ("yellow", "#ffd21f"),
           ("green", "#2fbf4f"), ("blue", "#2f7fe5"), ("white", "#ffffff"),
@@ -234,7 +295,8 @@ window.snip-pin.ghost {{ border-style: dashed; }}          /* click-through: the
 # overrides an entry ("copy = ctrl+shift+c"), several bindings are separated
 # by spaces, an empty value unbinds. Colours stay on the digits.
 ACTIONS = {
-    "copy": "ctrl+c", "save": "ctrl+s", "close": "", "cancel": "Escape", "confirm": "Return KP_Enter",
+    "copy": "ctrl+c", "save": "ctrl+s", "close": "", "destroy": "shift+Escape",
+    "cancel": "Escape", "confirm": "Return KP_Enter",
     "undo": "ctrl+z", "redo": "ctrl+shift+z ctrl+y",
     "reset": "ctrl+0", "reset_zoom": "", "reset_opacity": "ctrl+1", "click_through": "ctrl+t",
     "rotate_cw": "ctrl+r", "rotate_ccw": "ctrl+shift+r", "flip_h": "ctrl+h", "flip_v": "ctrl+j", "smooth": "",
@@ -244,7 +306,7 @@ ACTIONS.update({f"tool_{tool}": key.lower() for tool, key, _, _ in TOOLS})
 ACTIONS.update({f"color_{i + 1}": str(i + 1) for i in range(len(COLORS))})
 # what the mouse does; [mouse] in the config file overrides ("right = menu")
 MOUSE_DEFAULTS = {"right": "copy", "double": "copy", "middle": "menu"}
-MOUSE_ACTIONS = ("copy", "save", "close", "menu", "reset", "reset_zoom", "none")
+MOUSE_ACTIONS = ("copy", "save", "close", "destroy", "menu", "reset", "reset_zoom", "none")
 MOD_NAMES = {"ctrl": "CONTROL_MASK", "control": "CONTROL_MASK", "shift": "SHIFT_MASK",
              "alt": "ALT_MASK", "super": "SUPER_MASK", "win": "SUPER_MASK", "meta": "META_MASK"}
 KEY_ALIASES = {"esc": "Escape", "enter": "Return", "del": "Delete", "[": "bracketleft", "]": "bracketright",
@@ -707,7 +769,7 @@ def output_scale(monitors, pos):
 
 
 class Pin(Gtk.ApplicationWindow):
-    def __init__(self, app, path, pos, out_scale=1.0):
+    def __init__(self, app, path, pos, out_scale=1.0, state=None):
         # All pins share one process (see main), so the placement loop tells
         # windows apart by a unique title until each one has been placed.
         global _seq
@@ -759,6 +821,13 @@ class Pin(Gtk.ApplicationWindow):
         self.area.set_draw_func(self.draw)
         self.set_child(self.area)
         self.toolbar = self.build_toolbar()
+        self.destroying = False       # Shift+Esc: close without a way back
+        self.connect("close-request", self.on_close_request)
+        if state:                     # a reopened pin: zoom, opacity and annotations as they were
+            self.ops = ops_from_json(state.get("ops", []))
+            self.scale = max(self.min_scale(), min(float(state.get("scale", self.scale)), MAX_SCALE))
+            self.opacity = min(1.0, max(0.1, float(state.get("opacity", 1.0))))
+            self.set_opacity(self.opacity)
         self.apply_scale()
         if default_tool() is not None:
             self.set_tool(default_tool())
@@ -814,7 +883,7 @@ class Pin(Gtk.ApplicationWindow):
         self.menu = Gtk.PopoverMenu.new_from_model(self.build_menu())
         self.menu.set_parent(self.area)
         self.menu.set_has_arrow(False)
-        for name in ("copy", "save", "reset", "close", "undo", "redo", "click_through",
+        for name in ("copy", "save", "reset", "close", "destroy", "undo", "redo", "click_through",
                      "rotate_cw", "rotate_ccw", "flip_h", "flip_v"):
             act = Gio.SimpleAction.new(name, None)
             act.connect("activate", lambda *a, name=name: self.run_action(name))
@@ -940,6 +1009,34 @@ class Pin(Gtk.ApplicationWindow):
         self.osd = None
         self.area.queue_draw()
         return False
+
+    # ---- closing -----------------------------------------------------------------
+    def on_close_request(self, *a):
+        if not self.destroying and reopen_limit() > 0:
+            self.record_closed()
+        return False                                     # and close
+
+    def record_closed(self):
+        """Store the pin for `snip-pin.sh reopen`: image with crop and rotation baked in, plus state."""
+        if self.typing is not None:
+            self.commit_text()
+        c = self.client() if self.address else None
+        pos = (c["at"][0] + BORDER, c["at"][1] + BORDER) if c else self.pos
+        try:
+            os.makedirs(CLOSED_DIR, exist_ok=True)
+            stem = os.path.join(CLOSED_DIR, datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f"))
+            self.pixbuf.savev(stem + ".png", "png", [], [])
+            state = {"path": self.path, "pos": list(pos) if pos else None, "scale": self.scale,
+                     "base_scale": self.base_scale, "opacity": self.opacity, "ops": ops_to_json(self.ops)}
+            with open(stem + ".json", "w") as f:
+                json.dump(state, f)
+            prune_closed(reopen_limit())
+        except (OSError, GLib.Error) as e:
+            print(f"pin-view: cannot record the closed pin: {e}", file=sys.stderr)
+
+    def destroy_pin(self):
+        self.destroying = True
+        self.close()
 
     # ---- click-through -------------------------------------------------------
     def set_click_through(self, on):
@@ -1386,6 +1483,8 @@ class Pin(Gtk.ApplicationWindow):
             self.save()
         elif action == "close":
             self.close()
+        elif action == "destroy":
+            self.destroy_pin()
         elif action == "menu":
             self.on_menu(x, y)
         elif action == "undo":
@@ -1517,7 +1616,8 @@ class Pin(Gtk.ApplicationWindow):
         tail.append("Smooth scaling", "win.smooth")
         tail.append(f"Reset image\t{key_label('reset')}", "win.reset")
         tail.append(f"Click-through\t{key_label('click_through')}", "win.click_through")
-        tail.append(f"Close\t{key_label('cancel')}", "win.close")
+        tail.append(f"Close (snip-pin.sh reopen brings it back)\t{key_label('cancel')}", "win.close")
+        tail.append(f"Destroy\t{key_label('destroy')}", "win.destroy")
         m.append_section(None, tail)
         return m
 
@@ -1628,8 +1728,43 @@ def click_through_all(app):
         w.set_click_through(on)
 
 
+def reopen_pin(app):
+    """Bring the most recently closed pin back as it was; False if there is none."""
+    for j, png in closed_entries():
+        try:
+            with open(j) as f:
+                state = json.load(f)
+        except (OSError, ValueError):
+            state = None
+        try:
+            os.unlink(j)
+        except OSError:
+            pass
+        if not state or not os.path.exists(png):
+            continue
+        pos = tuple(state["pos"]) if state.get("pos") else None
+        try:
+            win = Pin(app, png, pos, out_scale=1.0 / float(state.get("base_scale") or 1.0), state=state)
+        except (GLib.Error, ValueError, ZeroDivisionError) as e:
+            print(f"pin-view: cannot reopen {png}: {e}", file=sys.stderr)
+            continue
+        win.path = state.get("path", png)          # the original file, for exports without annotations
+        try:
+            os.unlink(png)                          # loaded into the pixbuf; the entry is used up
+        except OSError:
+            pass
+        win.present()
+        win.place()
+        return True
+    notify("No closed pin to reopen")
+    return False
+
+
 def run_command(app, cmd):
-    if cmd == "--toggle":
+    if cmd == "--reopen":
+        if not reopen_pin(app) and not app.get_windows():
+            app.quit()
+    elif cmd == "--toggle":
         toggle_pins(app)
     elif cmd == "--close-all":
         close_all(app)
@@ -1743,7 +1878,10 @@ def main():
 
     def activate(app):
         serve(app)
-        open_pin(app, [os.path.abspath(sys.argv[1])] + sys.argv[2:])
+        if sys.argv[1] in COMMANDS:
+            run_command(app, sys.argv[1])
+        else:
+            open_pin(app, [os.path.abspath(sys.argv[1])] + sys.argv[2:])
     app.connect("activate", activate)
     GLib.set_prgname(APP_ID)   # -> Wayland app_id / Hyprland class "snip-pin"
     # Docks look the icon up by app_id via snip-pin.desktop (see README).

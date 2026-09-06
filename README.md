@@ -142,7 +142,7 @@ accepted.
 | Reset image | `Ctrl+0`: zoom, opacity, rotation and flips back to normal |
 | Copy image and close | `Ctrl+C`, double-click or right-click |
 | Save to the screenshot folder and close | `Ctrl+S` or the middle-click menu |
-| Close without copying | `Esc` |
+| Close without copying | `Esc`; `snip-pin.sh reopen` brings the last closed pin back where it was, with zoom, opacity and annotations. `Shift+Esc` destroys it for good |
 | Click-through | `Ctrl+T`: the pin ignores the mouse, everything goes to the window below (dashed border). It cannot take the key back, so bind `snip-pin.sh clickthrough`, which toggles every pin. On Hyprland this sets the window's `no_focus` property; elsewhere the pin relies on an empty input region |
 | Pin more images | drop image files from a file manager onto a pin |
 
@@ -185,6 +185,7 @@ opened from the picker appear centred.
 | `snip-pin.sh clipboard` | pin the image in the clipboard (PNG, JPEG, WebP, … or a copied image file), centred on the screen |
 | `snip-pin.sh screen` | capture the monitor under the pointer without a selection and pin it; `screen all` captures every monitor as one image |
 | `snip-pin.sh repeat` | capture the area of the last snip again (a progress bar, a chat window); `repeat 3` the third-last area |
+| `snip-pin.sh reopen` | bring the last closed pin back as it was (the last `reopen` = 5 closed pins are kept for the session) |
 | `snip-pin.sh toggle` | hide every pin, or show them all again where they were (annotations and zoom stay) |
 | `snip-pin.sh close-all` | close every pin; asks first when there are several |
 | `snip-pin.sh clickthrough` | make every pin click-through, or solid again if any is click-through |
@@ -225,6 +226,7 @@ effective settings and where each comes from.
 | `default_tool` | `none` | tool active as soon as a pin opens: `rect`, `ellipse`, `arrow`, `pen`, `text`, `counter`, `marker`, `blur` |
 | `zoom_at_pointer` | `1` | the wheel zooms around the pointer, so the pin moves; `0` zooms from the top-left corner |
 | `smooth` | `1` | bilinear scaling; `0` shows crisp pixel blocks when zoomed in (also a menu toggle) |
+| `reopen` | `5` | how many closed pins `reopen` can bring back; `0` turns it off |
 | `confirm_close_all` | `1` | `close-all` asks before closing more than one pin; `0` closes at once |
 | `action` | `copy+pin` | what a bare `snip-pin.sh` (and `screen`, `repeat`) does with the capture: `copy`, `save`, `pin`, joined by `+` |
 

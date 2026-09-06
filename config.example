@@ -24,6 +24,7 @@ default_tool = none           # tool active on a new pin: none, rect, ellipse, a
 confirm_close_all = 1         # `snip-pin.sh close-all` asks before closing several pins; 0 closes at once
 zoom_at_pointer = 1           # the wheel zooms around the pointer (the pin moves); 0 keeps the top-left corner
 smooth = 1                    # bilinear scaling; 0 draws crisp pixel blocks when zoomed in (menu: Smooth scaling)
+reopen = 5                    # closed pins `snip-pin.sh reopen` can bring back; 0 turns it off
 
 [keys]
 # action = binding [binding ...]; modifiers ctrl, shift, alt, super; an empty
@@ -32,6 +33,7 @@ smooth = 1                    # bilinear scaling; 0 draws crisp pixel blocks whe
 #copy = ctrl+c
 #save = ctrl+s
 #close =                      # close without copying (cancel does that when no tool is active)
+#destroy = shift+Escape       # close for good: `reopen` cannot bring it back
 #cancel = Escape              # cancel crop / deselect tool / close
 #confirm = Return KP_Enter    # apply crop, commit text
 #undo = ctrl+z
@@ -60,7 +62,7 @@ smooth = 1                    # bilinear scaling; 0 draws crisp pixel blocks whe
 #color_1 = 1                  # ... color_7 = 7
 
 [mouse]
-# right, double and middle click: copy, save, close, menu, reset, reset_zoom or none
+# right, double and middle click: copy, save, close, destroy, menu, reset, reset_zoom or none
 #right = copy
 #double = copy
 #middle = menu
