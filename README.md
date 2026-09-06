@@ -125,7 +125,8 @@ windowrulev2 = noborder, class:^(snip-pin)$
 windowrulev2 = rounding 0, class:^(snip-pin)$
 ```
 
-Placement works with both the Lua (0.56+) and the classic dispatcher syntax;
+For a drop shadow under pins, leave `no_shadow` out of the rule and let the
+compositor draw it. Placement works with both the Lua (0.56+) and the classic dispatcher syntax;
 the viewer tries the Lua form first and remembers which one the compositor
 accepted.
 
@@ -226,6 +227,8 @@ effective settings and where each comes from.
 | `default_tool` | `none` | tool active as soon as a pin opens: `rect`, `ellipse`, `arrow`, `pen`, `text`, `counter`, `marker`, `blur` |
 | `zoom_at_pointer` | `1` | the wheel zooms around the pointer, so the pin moves; `0` zooms from the top-left corner |
 | `smooth` | `1` | bilinear scaling; `0` shows crisp pixel blocks when zoomed in (also a menu toggle) |
+| `opacity` | `100` | starting opacity of a pin in percent; `Ctrl+1` returns to it |
+| `alpha_bg` | `transparent` | behind transparent images (clipboard, files): `transparent`, `checker`, or a colour like `#ffffff` |
 | `reopen` | `5` | how many closed pins `reopen` can bring back; `0` turns it off |
 | `confirm_close_all` | `1` | `close-all` asks before closing more than one pin; `0` closes at once |
 | `action` | `copy+pin` | what a bare `snip-pin.sh` (and `screen`, `repeat`) does with the capture: `copy`, `save`, `pin`, joined by `+` |

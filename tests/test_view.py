@@ -475,3 +475,19 @@ def test_closed_entries_newest_first_and_prune(tmp_path, view, monkeypatch):
     monkeypatch.setattr(view, "CLOSED_DIR", str(tmp_path / "missing"))
     assert view.closed_entries() == []
     assert view.ACTIONS["destroy"] == "shift+Escape" and "--reopen" in view.COMMANDS
+
+
+def test_display_settings(view, monkeypatch):
+    monkeypatch.setenv("SNIP_PIN_ALPHA_BG", "Checker")
+    assert view.alpha_background() == "checker"
+    monkeypatch.setenv("SNIP_PIN_ALPHA_BG", "#FFEEDD")
+    assert view.alpha_background() == "#ffeedd"
+    monkeypatch.setenv("SNIP_PIN_ALPHA_BG", "bogus")
+    assert view.alpha_background() == "transparent"
+    monkeypatch.setenv("SNIP_PIN_OPACITY", "70")
+    assert view.default_opacity() == 0.7
+    monkeypatch.setenv("SNIP_PIN_OPACITY", "3")
+    assert view.default_opacity() == 0.1
+    monkeypatch.setenv("SNIP_PIN_OPACITY", "x")
+    assert view.default_opacity() == 1.0
+    assert view.checker_pattern() is view.checker_pattern()
