@@ -15,6 +15,7 @@ layout) may still change.
 - `cursor = 1` includes the mouse cursor in the capture (#75).
 - `snip-pin.sh screen` captures the monitor under the pointer without a selection, `screen all` every monitor as one image; both pin the result like a snip (#96).
 - `snip-pin.sh repeat [N]` captures the area of the N-th last snip again without a selection; the last `areas` (default 8) regions are remembered in the cache (#76).
+- `snip-pin.sh copy` and `snip-pin.sh save` select and copy or save without pinning; `action` in the config sets what the bare command does (`copy`, `save`, `pin` joined by `+`, default `copy+pin`) (#77).
 
 ## [0.3.0] – 2026-09-06
 
