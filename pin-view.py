@@ -16,6 +16,8 @@ usage: pin-view.py IMAGE [X Y]
 Annotations (toolbar under the pin while the pointer hovers it, or keys):
   R rectangle   E ellipse   A arrow   P pen   T text   M marker   B blur (mosaic)
   N counter (click: 1, 2, 3 ...)   C crop (drag, Enter applies, Esc cancels; undoable)
+  X eraser (click an annotation)   no tool: click selects an annotation, drag moves it,
+  Delete removes it, a swatch or width recolours it, Esc deselects
   1-9 colour (Ctrl+click a swatch: any colour)   [ ] stroke width   Ctrl+Z / Ctrl+Shift+Z undo / redo
   With a tool selected, left-drag draws; press its key again (or Esc) to
   deselect. Copy and save bake the annotations into the image.
@@ -335,8 +337,9 @@ TOOLS = [("rect", "R", "Rect", "Rectangle outline"), ("ellipse", "E", "Ellipse",
          ("arrow", "A", "Arrow", "Arrow"), ("pen", "P", "Pen", "Freehand pen"),
          ("text", "T", "Text", "Text: click, type, Enter"), ("counter", "N", "1 2 3", "Numbered step: click"),
          ("marker", "M", "Mark", "Highlighter"), ("blur", "B", "Blur", "Mosaic (hide secrets)"),
-         ("crop", "C", "Crop", "Crop: drag, Enter applies, Esc cancels")]
-CLICK_TOOLS = ("text", "counter")                  # placed with a click, not a drag
+         ("crop", "C", "Crop", "Crop: drag, Enter applies, Esc cancels"),
+         ("eraser", "X", "Erase", "Eraser: click an annotation to remove it")]
+CLICK_TOOLS = ("text", "counter", "eraser")        # placed with a click, not a drag
 MARKER_ALPHA = 0.4
 MARKER_FACTOR = 3.5                                # marker stroke = width * factor
 TEXT_PX = {2: 16, 4: 22, 7: 30}                    # font size per stroke width
@@ -420,7 +423,7 @@ def save_tool_memory():
 ACTIONS = {
     "copy": "ctrl+c", "save": "ctrl+s", "save_as": "ctrl+shift+s", "print": "ctrl+p",
     "close": "", "destroy": "shift+Escape",
-    "cancel": "Escape", "confirm": "Return KP_Enter",
+    "cancel": "Escape", "confirm": "Return KP_Enter", "delete": "Delete",
     "undo": "ctrl+z", "redo": "ctrl+shift+z ctrl+y",
     "reset": "ctrl+0", "reset_zoom": "", "reset_opacity": "ctrl+1", "click_through": "ctrl+t",
     "rotate_cw": "ctrl+r", "rotate_ccw": "ctrl+shift+r", "flip_h": "ctrl+h", "flip_v": "ctrl+j", "smooth": "",
@@ -905,7 +908,7 @@ def norm_rect(pts):
     (x0, y0), (x1, y1) = pts[0], pts[-1]
     return min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)
 
-MARKERS = ("crop", "rotate", "flip")               # undo markers, not drawings
+MARKERS = ("crop", "rotate", "flip", "erase", "move")   # undo markers, not drawings
 
 
 def transform_point(kind, arg, iw, ih):
@@ -931,6 +934,82 @@ def transform_ops(ops, kind, arg, iw, ih):
             continue
         op["pts"] = [f(x, y) for x, y in op["pts"]]
         op.pop("_mosaic", None)
+
+
+def seg_dist(p, a, b):
+    """Distance from p to the segment a-b."""
+    (px, py), (ax, ay), (bx, by) = p, a, b
+    dx, dy = bx - ax, by - ay
+    if dx == 0 and dy == 0:
+        return math.hypot(px - ax, py - ay)
+    t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)))
+    return math.hypot(px - (ax + t * dx), py - (ay + t * dy))
+
+
+def op_bbox(op):
+    """(x0, y0, x1, y1) of a drawing op in image coordinates."""
+    k, pts, w = op["kind"], op["pts"], op["width"]
+    if k == "text":
+        size = size_for(TEXT_PX, w, 12, 2.5)
+        x, y = pts[0]
+        lines = (op.get("text", "") or " ").split("\n")
+        top = y - size * 0.75
+        return x, top, x + max(len(ln) for ln in lines) * size * 0.6, top + size * 1.2 * len(lines)
+    if k == "counter":
+        r = size_for(COUNTER_R, w, 8, 1.4)
+        x, y = pts[0]
+        return x - r, y - r, x + r, y + r
+    xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+    pad = w * (MARKER_FACTOR if k == "marker" else 1) / 2
+    return min(xs) - pad, min(ys) - pad, max(xs) + pad, max(ys) + pad
+
+
+def hit_op(op, p, tol=6):
+    """Does point p (image coordinates) hit the drawing op? Outlines by their
+    stroke, filled things (blur, text, counter) by their box, lines by distance."""
+    k = op["kind"]
+    if k in MARKERS:
+        return False
+    x0, y0, x1, y1 = op_bbox(op)
+    px, py = p
+    if k in ("blur", "text", "counter"):
+        return x0 - tol <= px <= x1 + tol and y0 - tol <= py <= y1 + tol
+    if k in ("rect", "ellipse"):
+        bx0, by0, bx1, by1 = norm_rect(op["pts"])
+        if k == "rect":
+            inside = bx0 - tol <= px <= bx1 + tol and by0 - tol <= py <= by1 + tol
+            deep = bx0 + tol < px < bx1 - tol and by0 + tol < py < by1 - tol
+            return inside and not deep
+        rx, ry = max((bx1 - bx0) / 2, 0.5), max((by1 - by0) / 2, 0.5)
+        cx, cy = (bx0 + bx1) / 2, (by0 + by1) / 2
+        d = math.hypot((px - cx) / rx, (py - cy) / ry)         # 1 on the ellipse
+        return abs(d - 1) * min(rx, ry) <= tol + op["width"] / 2
+    tol = tol + op["width"] * (MARKER_FACTOR if k == "marker" else 1) / 2
+    pts = op["pts"]
+    if len(pts) == 1:
+        return math.hypot(px - pts[0][0], py - pts[0][1]) <= tol
+    return any(seg_dist(p, a, b) <= tol for a, b in zip(pts, pts[1:]))
+
+
+def find_op(ops, p, tol=6):
+    """Index of the topmost drawing op under p, or None."""
+    for i in range(len(ops) - 1, -1, -1):
+        if hit_op(ops[i], p, tol):
+            return i
+    return None
+
+
+def renumber_counters(ops):
+    n = 0
+    for op in ops:
+        if op["kind"] == "counter":
+            n += 1
+            op["n"] = n
+
+
+def move_op(op, dx, dy):
+    op["pts"] = [(x + dx, y + dy) for x, y in op["pts"]]
+    op.pop("_mosaic", None)
 
 
 def shift_ops(ops, dx, dy):
@@ -1183,6 +1262,8 @@ class Pin(Gtk.ApplicationWindow):
         self.typing = None            # text op being typed
         self.crop_pending = None      # (x0, y0, w, h) waiting for Enter
         self.thumb = None             # thumbnail mode: {"scale": scale before, "region": (x0, y0, w, h) or None}
+        self.selected = None          # index in ops of the annotation being edited (no tool active)
+        self.drag_op = None           # (index, dx, dy so far) while an annotation is dragged
         self.turns = 0                # net quarter turns clockwise, flips: for "reset"
         self.flipped = {"h": False, "v": False}
         self.address = None           # Hyprland window address once known (placement, crop)
@@ -1369,8 +1450,25 @@ class Pin(Gtk.ApplicationWindow):
             rect = crop_rect(self.pixbuf, self.pending["pts"])
         if rect is not None:
             self.draw_crop(cr, rect)
+        if self.selected is not None and self.selected < len(self.ops):
+            self.draw_selection(cr, self.ops[self.selected])
         if self.osd is not None:
             self.draw_osd(cr, w, h)
+
+    def draw_selection(self, cr, op):
+        """A dashed box around the selected annotation."""
+        x0, y0, x1, y1 = op_bbox(op)
+        f = self.area.get_width() / self.iw or 1
+        cr.save()
+        cr.set_source_rgba(1, 1, 1, 0.9)
+        cr.set_line_width(1.5 / f)
+        cr.set_dash([5 / f, 3 / f])
+        cr.rectangle(x0 - 3 / f, y0 - 3 / f, (x1 - x0) + 6 / f, (y1 - y0) + 6 / f)
+        cr.stroke_preserve()
+        cr.set_source_rgba(0, 0, 0, 0.6)
+        cr.set_dash([5 / f, 3 / f], 5 / f)
+        cr.stroke()
+        cr.restore()
 
     def draw_crop(self, cr, rect):
         """Dim everything outside the crop rectangle and outline it."""
@@ -1572,11 +1670,13 @@ class Pin(Gtk.ApplicationWindow):
             if wi is not None:
                 self.width_idx = wi
         self.tool = tool
+        if tool is not None:
+            self.selected = None
         if tool is None:
             self.remove_css_class("editing")
         else:
             self.add_css_class("editing")
-        cursor = {None: None, "text": "text", "counter": "pointer"}.get(tool, "crosshair")
+        cursor = {None: None, "text": "text", "counter": "pointer", "eraser": "not-allowed"}.get(tool, "crosshair")
         self.area.set_cursor(Gdk.Cursor.new_from_name(cursor) if cursor else None)
         self.sync_toolbar()
 
@@ -1599,6 +1699,15 @@ class Pin(Gtk.ApplicationWindow):
                 self.transform("rotate", 4 - op["arg"], record=False)
             elif op["kind"] == "flip":
                 self.transform("flip", op["arg"], record=False)
+            elif op["kind"] == "erase":
+                self.ops.insert(min(op["index"], len(self.ops)), op["op"])
+                renumber_counters(self.ops)
+            elif op["kind"] == "move":
+                if op["before"] is not None:
+                    self.ops[op["index"]] = op["before"]
+                else:
+                    move_op(self.ops[op["index"]], -op["dx"], -op["dy"])
+            self.selected = None
             self.redo_stack.append(op)
         self.sync_toolbar()
         self.area.queue_draw()
@@ -1611,9 +1720,74 @@ class Pin(Gtk.ApplicationWindow):
                 self.set_pixbuf(self.pixbuf.new_subpixbuf(x0, y0, cw, ch).copy(), x0, y0)
             elif op["kind"] in ("rotate", "flip"):
                 self.transform(op["kind"], op["arg"], record=False)
+            elif op["kind"] == "erase":
+                self.ops.pop(op["index"])
+                renumber_counters(self.ops)
+            elif op["kind"] == "move":
+                if op["before"] is not None:
+                    self.ops[op["index"]] = dict(op["before"], color=op["color"], width=op["width"])
+                else:
+                    move_op(self.ops[op["index"]], op["dx"], op["dy"])
+            self.selected = None
             self.ops.append(op)
         self.sync_toolbar()
         self.area.queue_draw()
+
+    # ---- eraser and re-editing ----------------------------------------------------
+    def erase_at(self, p):
+        """Remove the topmost annotation under p (eraser tool); undoable."""
+        i = find_op(self.ops, p, 6 / (self.area.get_width() / self.iw or 1))
+        if i is None:
+            return False
+        self.selected = None
+        self.remove_op(i)
+        return True
+
+    def remove_op(self, i):
+        """Take ops[i] out as an undoable erase marker; numbered steps renumber."""
+        op = self.ops.pop(i)
+        renumber_counters(self.ops)
+        self.push({"kind": "erase", "pts": [], "color": self.color, "width": self.width, "text": "",
+                   "op": op, "index": i})
+
+    def select_at(self, p):
+        """Select the annotation under p (no tool active), or clear the selection."""
+        i = find_op(self.ops, p, 6 / (self.area.get_width() / self.iw or 1))
+        if i != self.selected:
+            self.selected = i
+            self.sync_toolbar()
+            self.area.queue_draw()
+        return i is not None
+
+    def delete_selected(self):
+        if self.selected is None or self.selected >= len(self.ops):
+            return False
+        i, self.selected = self.selected, None
+        self.remove_op(i)
+        return True
+
+    def restyle_selected(self):
+        """The current colour and width applied to the selected annotation (undoable as a replace)."""
+        if self.selected is None or self.selected >= len(self.ops):
+            return
+        i = self.selected
+        old = self.ops[i]
+        new = dict(old, color=self.color, width=self.width)
+        new.pop("_mosaic", None)
+        self.ops[i] = new
+        self.ops.append({"kind": "move", "pts": [], "color": self.color, "width": self.width, "text": "",
+                         "index": i, "dx": 0, "dy": 0, "before": old})
+        self.redo_stack.clear()
+        self.sync_toolbar()
+        self.area.queue_draw()
+
+    def end_op_drag(self):
+        """Commit a finished annotation drag as an undoable move marker."""
+        i, dx, dy = self.drag_op
+        self.drag_op = None
+        if dx or dy:
+            self.push({"kind": "move", "pts": [], "color": self.color, "width": self.width, "text": "",
+                       "index": i, "dx": dx, "dy": dy, "before": None})
 
     # ---- crop ---------------------------------------------------------------
     def apply_crop(self):
@@ -1836,6 +2010,7 @@ class Pin(Gtk.ApplicationWindow):
         self.color_idx = idx
         if self.typing is not None:
             self.typing["color"] = self.color
+        self.restyle_selected()
         self.note_tool_choice()
         self.sync_toolbar()
         self.area.queue_draw()
@@ -1844,6 +2019,7 @@ class Pin(Gtk.ApplicationWindow):
         self.width_idx = max(0, min(len(WIDTHS) - 1, idx))
         if self.typing is not None:
             self.typing["width"] = self.width
+        self.restyle_selected()
         self.note_tool_choice()
         self.sync_toolbar()
         self.area.queue_draw()
@@ -1882,12 +2058,30 @@ class Pin(Gtk.ApplicationWindow):
     # ---- input ------------------------------------------------------------
     def on_drag_begin(self, gesture, x, y):
         self.moving = False
+        self.drag_op = None
+        if self.tool is None and self.thumb is None and self.ops:
+            p = self.to_img(x, y)
+            i = find_op(self.ops, p, 6 / (self.area.get_width() / self.iw or 1))
+            if i is not None:                                       # drag an annotation, not the window
+                self.selected = i
+                self.drag_op = (i, 0.0, 0.0)
+                self.sync_toolbar()
+                self.area.queue_draw()
+            return
         if self.tool is None or self.tool in CLICK_TOOLS or self.thumb is not None:
             return
         self.pending = self.new_op(self.tool, self.to_img(x, y))
         self.area.queue_draw()
 
     def on_drag_update(self, gesture, dx, dy):
+        if self.drag_op is not None:
+            i, done_x, done_y = self.drag_op
+            f = self.iw / (self.area.get_width() or 1)
+            ix, iy = dx * f, dy * f
+            move_op(self.ops[i], ix - done_x, iy - done_y)
+            self.drag_op = (i, ix, iy)
+            self.area.queue_draw()
+            return
         if self.pending is not None:
             ok, sx, sy = gesture.get_start_point()
             p = self.to_img(sx + dx, sy + dy)
@@ -1911,6 +2105,9 @@ class Pin(Gtk.ApplicationWindow):
             surface.begin_move(gesture.get_device(), 1, sx + dx, sy + dy, gesture.get_current_event_time())
 
     def on_drag_end(self, gesture, dx, dy):
+        if self.drag_op is not None:
+            self.end_op_drag()
+            return
         op, self.pending = self.pending, None
         if op is None:
             return
@@ -1934,6 +2131,10 @@ class Pin(Gtk.ApplicationWindow):
         elif self.thumb is not None:
             if n == 1:
                 self.set_thumbnail(False)
+        elif self.tool == "eraser" and n == 1:
+            self.erase_at(self.to_img(x, y))
+        elif self.tool is None and n == 1:
+            self.select_at(self.to_img(x, y))
         elif self.tool == "text":
             self.commit_text()
             self.start_text(self.to_img(x, y))
@@ -2007,8 +2208,12 @@ class Pin(Gtk.ApplicationWindow):
             self.set_width(self.width_idx - 1)
         elif action == "width_up":
             self.set_width(self.width_idx + 1)
+        elif action == "delete":
+            return self.delete_selected()
         elif action == "cancel":
-            if self.crop_pending is not None:
+            if self.selected is not None:
+                self.selected = None; self.sync_toolbar(); self.area.queue_draw()
+            elif self.crop_pending is not None:
                 self.crop_pending = None; self.sync_toolbar(); self.area.queue_draw()
             elif self.tool is not None:
                 self.set_tool(None)

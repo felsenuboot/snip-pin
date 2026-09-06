@@ -620,3 +620,45 @@ def test_tool_memory(view, tmp_path, monkeypatch):
     view.TOOL_MEMORY.clear()
     view.load_tool_memory()
     assert view.TOOL_MEMORY == {"text": ("#000000", 4)}
+
+
+def mk(kind, pts, width=4, **extra):
+    return dict({"kind": kind, "pts": pts, "color": (1, 0, 0), "width": width, "text": ""}, **extra)
+
+
+def test_hit_op_by_kind(view):
+    rect = mk("rect", [(10, 10), (110, 60)])
+    assert view.hit_op(rect, (10, 30)) and view.hit_op(rect, (60, 61))         # on the outline
+    assert not view.hit_op(rect, (60, 35))                                     # deep inside: not the outline
+    assert not view.hit_op(rect, (200, 200))
+    ell = mk("ellipse", [(0, 0), (100, 50)])
+    assert view.hit_op(ell, (50, 0)) and view.hit_op(ell, (100, 25)) and not view.hit_op(ell, (50, 25))
+    arrow = mk("arrow", [(0, 0), (100, 0)])
+    assert view.hit_op(arrow, (50, 3)) and not view.hit_op(arrow, (50, 20))
+    pen = mk("pen", [(0, 0), (10, 10), (20, 0)], width=2)
+    assert view.hit_op(pen, (10, 8)) and not view.hit_op(pen, (10, 30))
+    marker = mk("marker", [(0, 0), (100, 0)], width=4)
+    assert view.hit_op(marker, (50, 10))                                       # wide stroke
+    blur = mk("blur", [(0, 0), (40, 40)])
+    assert view.hit_op(blur, (20, 20)) and not view.hit_op(blur, (60, 60))
+    text = mk("text", [(10, 30)], text="Hello")
+    assert view.hit_op(text, (30, 25)) and not view.hit_op(text, (300, 25))
+    counter = mk("counter", [(50, 50)], n=1)
+    assert view.hit_op(counter, (55, 55)) and not view.hit_op(counter, (80, 50))
+    assert not view.hit_op(mk("crop", []), (0, 0))
+    ops = [rect, arrow]
+    assert view.find_op(ops, (50, 3)) == 1 and view.find_op(ops, (10, 30)) == 0
+    assert view.find_op(ops, (500, 500)) is None
+
+
+def test_renumber_and_move(view):
+    ops = [mk("counter", [(0, 0)], n=1), mk("rect", [(0, 0), (1, 1)]), mk("counter", [(5, 5)], n=2),
+           mk("counter", [(9, 9)], n=3)]
+    ops.pop(0)
+    view.renumber_counters(ops)
+    assert [op["n"] for op in ops if op["kind"] == "counter"] == [1, 2]
+    op = mk("blur", [(0, 0), (4, 4)], _mosaic="cache")
+    view.move_op(op, 3, -1)
+    assert op["pts"] == [(3, -1), (7, 3)] and "_mosaic" not in op
+    assert "eraser" in {t for t, _, _, _ in view.TOOLS} and "eraser" in view.CLICK_TOOLS
+    assert view.ACTIONS["delete"] == "Delete" and "erase" in view.MARKERS and "move" in view.MARKERS
