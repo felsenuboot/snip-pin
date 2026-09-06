@@ -428,3 +428,18 @@ def test_render_skips_transform_markers(tmp_path, view):
     view.render_png(pb.rotate_simple(GdkPixbuf.PixbufRotation.CLOCKWISE), ops, str(tmp_path / "o.png"))
     assert png_size(str(tmp_path / "o.png")) == (20, 40)
     assert view.ACTIONS["reset"] == "ctrl+0" and "reset" in view.MOUSE_ACTIONS
+
+
+def test_zoom_shift_keeps_the_image_point_under_the_pointer(view):
+    # pointer at widget (100, 50) over image point (200, 100) at scale 0.5; zooming to 1.0
+    # draws that point at (200, 100), so the window must move by (-100, -50)
+    assert view.zoom_shift((100, 50), (200, 100), 1.0) == (-100, -50)
+    assert view.zoom_shift((100, 50), (200, 100), 0.5) == (0, 0)
+
+
+def test_pick_filter(view):
+    import cairo
+    assert view.pick_filter(True, 3.0, 1.0) == cairo.FILTER_GOOD
+    assert view.pick_filter(False, 1.0, 1.0) == cairo.FILTER_GOOD        # not zoomed in: smooth downscale
+    assert view.pick_filter(False, 0.5, 1.0) == cairo.FILTER_GOOD
+    assert view.pick_filter(False, 2.0, 1.0) == cairo.FILTER_NEAREST
