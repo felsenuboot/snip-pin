@@ -20,6 +20,7 @@
 #   snip-pin.sh screen     capture the monitor under the pointer, no selection
 #   snip-pin.sh screen all capture every monitor as one image
 #   snip-pin.sh repeat [N] capture the area of the N-th last snip again (default 1)
+#   snip-pin.sh color      pick a pixel colour with hyprpicker's lens, copy it (color_format)
 #   snip-pin.sh toggle     hide every pin, or show them all again where they were
 #   snip-pin.sh close-all  close every pin (asks first when there are several)
 #   snip-pin.sh clickthrough  toggle click-through for every pin (the mouse goes to what is below)
@@ -281,6 +282,17 @@ PY
                 | "\(.w | floor)x\(.h | floor)+\(.x)+\(.y)"
               end')
         [[ "$SNIP_GEOM" =~ ^[0-9]+x[0-9]+\+-?[0-9]+\+-?[0-9]+$ ]] || { notify "No monitor found"; exit 1; } ;;
+    color)
+        # Colour picker: hyprpicker's own zoom lens, the value copied to the clipboard
+        # and shown as a toast. The overlay (#73) will bring this into the selection.
+        command -v hyprpicker >/dev/null || { notify "hyprpicker is not installed"; exit 1; }
+        fmt=${SNIP_PIN_COLOR_FORMAT:-hex}; [[ "$fmt" =~ ^(rgb|hsl|hsv|cmyk|hex)$ ]] || fmt=hex
+        color=$(hyprpicker -f "$fmt" -b -q 2>/dev/null) || exit 0             # Esc: nothing picked
+        [[ -n "$color" ]] || exit 0
+        printf '%s' "$color" | wl-copy
+        notify "Colour $color copied"
+        log "color $color"
+        exit 0 ;;
     repeat)
         # the N-th most recent capture area (newest first in $CACHE/areas)
         n=${2:-1}
@@ -338,7 +350,7 @@ PY
             printf '  %-12s MISSING  (python-gobject and gtk4)\n' "GTK 4"; missing=1
         fi
         echo "optional:"
-        check hyprpicker optional "freezes the screen during the selection"
+        check hyprpicker optional "freezes the screen during the selection; the colour picker"
         check notify-send optional "toasts (libnotify)"
         check tesseract optional "Copy text (OCR); language packs: tesseract --list-langs"
         if python3 -c 'import numpy' 2>/dev/null; then printf '  %-12s %s\n' "numpy" "$(python3 -c 'import numpy; print(numpy.__version__)')"
@@ -403,6 +415,7 @@ PY
         show ocr_lang eng
         show ocr_cmd ''
         show debug 0
+        show color_format hex
         exit 0 ;;
     log)
         [[ -f "$LOG" ]] || { echo "no log at $LOG (set debug = 1 in the config)"; exit 0; }
@@ -410,7 +423,7 @@ PY
         exit 0 ;;
     --version|-V)
         cat "$HERE/VERSION"; exit 0 ;;
-    *)  echo "usage: snip-pin.sh [copy|save|last|history|clipboard|pin FILE|screen [all]|repeat [N]|toggle|close-all|clickthrough|reopen|group [next|prev|N]|clear|doctor|config|log|--version]" >&2
+    *)  echo "usage: snip-pin.sh [copy|save|last|history|clipboard|pin FILE|screen [all]|repeat [N]|color|toggle|close-all|clickthrough|reopen|group [next|prev|N]|clear|doctor|config|log|--version]" >&2
         echo "  (no argument: select a region, capture it, then copy and pin it, or what \`action\` says)" >&2; exit 2 ;;
 esac
 

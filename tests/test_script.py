@@ -606,3 +606,22 @@ def test_debug_log_and_log_subcommand(tmp_path):
     assert "sh[" in text and "geometry 10x10+0+0" in text and "captured" in text
     r = run(["log"], env)
     assert r.returncode == 0 and "captured" in r.stdout
+
+
+def test_color_subcommand_copies_the_picked_value(tmp_path):
+    env = make_env(tmp_path)
+    b, log = fake_tools(tmp_path)
+    (b / "hyprpicker").write_text(f'#!/bin/sh\necho "hyprpicker $*" >> "{log}"\nprintf "#a1b2c3"\n')
+    (b / "hyprpicker").chmod(0o755)
+    (b / "wl-copy").write_text(f'#!/bin/sh\nprintf "wl-copy: %s\\n" "$(cat)" >> "{log}"\n')
+    (b / "wl-copy").chmod(0o755)
+    env["PATH"] = f"{b}:{env['PATH']}"
+    assert run(["color"], env).returncode == 0
+    text = log.read_text()
+    assert "hyprpicker -f hex -b -q" in text and "wl-copy: #a1b2c3" in text
+    env["SNIP_PIN_COLOR_FORMAT"] = "rgb"
+    run(["color"], env)
+    assert "hyprpicker -f rgb -b -q" in log.read_text()
+    env["SNIP_PIN_COLOR_FORMAT"] = "bogus"
+    run(["color"], env)
+    assert log.read_text().count("-f hex") == 2
