@@ -12,6 +12,7 @@ layout) may still change.
 - Configuration file `~/.config/snip-pin/config` (`key = value`, see `config.example`) read by the script and the viewer; environment variables still override. The viewer re-reads it whenever a pin is opened, so a change applies to the next pin even though all pins share one process. `snip-pin.sh config` prints the effective settings with their source (#87).
 - Rebindable keys and mouse buttons on a pin: `[keys]` maps actions (`copy`, `save`, `undo`, `tool_arrow`, ...) to bindings such as `ctrl+shift+c`; `[mouse]` sets what right-click, double-click and middle-click do (`copy`, `save`, `close`, `menu`, `reset_zoom`, `none`). Menus show the configured keys (#87).
 - The selection's look is configurable: `sel_border`, `sel_width`, `sel_mask`, `sel_fill` (colours as `#rrggbb` or `#rrggbbaa`), and slurp shows the selection's size while dragging (`sel_size = 0` hides it) (#74).
+- `cursor = 1` includes the mouse cursor in the capture (#75).
 
 ## [0.3.0] – 2026-09-06
 

@@ -77,6 +77,7 @@ SEL_WIDTH=$(int_or SNIP_PIN_SEL_WIDTH 1)                  #        outline width
 SEL_MASK=$(color_or SNIP_PIN_SEL_MASK '#00000080')         #        dim over the rest of the screen
 SEL_FILL=$(color_or SNIP_PIN_SEL_FILL '#00000000')         #        fill inside the selection
 SEL_SIZE=$(int_or SNIP_PIN_SEL_SIZE 1)                    #        1 = show the size while dragging
+CURSOR=$(int_or SNIP_PIN_CURSOR 0)                        # 1 = include the mouse cursor in the capture
 
 mkdir -p "$CACHE/kept" "$STATE"
 [[ "$KEEP" -gt 0 ]] && find "$CACHE" -maxdepth 1 -name '*.png' -mtime +"$KEEP" -delete 2>/dev/null
@@ -231,6 +232,7 @@ PY
         show sel_mask '#00000080'
         show sel_fill '#00000000'
         show sel_size 1
+        show cursor 0
         exit 0 ;;
     --version|-V)
         cat "$HERE/VERSION"; exit 0 ;;
@@ -309,6 +311,8 @@ IFS='x+' read -r W H X Y <<< "$geom"
 [[ "$W" -lt 1 || "$H" -lt 1 ]] && exit 0
 
 file="$CACHE/$(date +%Y%m%d_%H%M%S_%N)_x${X}_y${Y}.png"
-grim -g "${X},${Y} ${W}x${H}" -l 1 "$file" || exit 1
+grim_opts=(-l 1)
+[[ "$CURSOR" -ne 0 ]] && grim_opts+=(-c)
+grim -g "${X},${Y} ${W}x${H}" "${grim_opts[@]}" "$file" || exit 1
 wl-copy --type image/png < "$file"
 pin_file "$file"
