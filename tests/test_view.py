@@ -548,3 +548,7 @@ def test_clipboard_settings_and_paths(view, monkeypatch):
     assert view.copy_as_file() is True
     p = view.clip_file_path("/tmp/x/snip-pin-abc.png")
     assert p.startswith(view.CLIP_DIR) and p.endswith(".png") and "snip_" in os.path.basename(p)
+
+
+def test_print_action_is_registered(view):
+    assert view.ACTIONS["print"] == "ctrl+p" and "print" in view.MOUSE_ACTIONS

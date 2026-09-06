@@ -27,6 +27,7 @@ layout) may still change.
 - Thumbnail mode: `Ctrl+M` or `Shift` + double-click collapses a pin into a `thumb_size` (75 px) tile at its corner, a click brings it back; with a crop marquee drawn, `Shift+Enter` shows only that part as the tile (#66).
 - `Ctrl+Shift+S` opens a Save As dialog preset with the folder, the `filename` pattern and the last extension used; `.png`, `.jpg` or `.webp` picks the encoder and the pin stays open. Quick save, autosave and the `save` mode use the `filename` strftime pattern and the `format` / `quality` settings (#81).
 - Copying from a pin offers the image as `image/png` and as a file (`text/uri-list`) at once, so file managers and chat clients paste a file while image editors take the pixels; `copy_file = never` keeps PNG only. The viewer owns the clipboard itself and lingers after the last pin until another program takes the clipboard over (#83).
+- `Ctrl+P` prints a pin through GTK's print dialog, annotations included, scaled to fit the page and centred (#85).
 
 ## [0.3.0] – 2026-09-06
 
