@@ -748,3 +748,59 @@ def test_config_edit_creates_the_file_and_opens_the_editor(tmp_path):
     assert (tmp_path / "ed.log").read_text().strip() == f"edit {cfg}"
     r = run(["config", "--edit"], env)                                      # second time: no re-creation
     assert "created" not in r.stdout
+
+
+def test_frames_are_kept_and_offered_to_the_overlay(tmp_path):
+    viewer_log = tmp_path / "viewer.log"
+    env = make_env(tmp_path, viewer_log)
+    b, log = fake_tools(tmp_path)
+    ppm = tmp_path / "frame.ppm"
+    ppm.write_bytes(b"P6\n8 4\n255\n" + bytes([0, 0, 255] * 32))
+    (b / "grim").write_text(f'#!/bin/sh\necho "grim $*" >> "{log}"\nfor a; do f=$a; done\ncp "{ppm}" "$f"\n')
+    (b / "grim").chmod(0o755)
+    env["PATH"] = f"{b}:{env['PATH']}"
+    env["SNIP_NO_ELEMENTS"] = "1"
+    env["SNIP_PIN_SELECT"] = fake_selector(tmp_path, f'cat > "{tmp_path}/input.json"; printf "4x2+1+1"')
+    assert run([], env).returncode == 0
+    wait_for(viewer_log)
+    frames = tmp_path / "cache" / "snip-pin" / "frames"
+    for _ in range(100):                                    # the PNG is written in the background
+        if list(frames.glob("*.png")):
+            break
+        time.sleep(0.05)
+    pngs = sorted(frames.glob("*.png"))
+    assert len(pngs) == 1 and (frames / (pngs[0].stem + ".json")).exists()
+    import json
+    meta = json.loads((frames / (pngs[0].stem + ".json")).read_text())
+    assert meta["origin"] == [0, 0] and [10, 20, 300, 200] in meta["windows"]
+    assert json.loads((tmp_path / "input.json").read_text())["frames"] == []      # the first snip had none
+    # the second snip is offered the first one's screen
+    viewer_log.unlink()
+    assert run([], env).returncode == 0
+    wait_for(viewer_log)
+    offered = json.loads((tmp_path / "input.json").read_text())["frames"]
+    assert len(offered) == 1 and offered[0]["png"] == str(pngs[0]) and offered[0]["json"].endswith(".json")
+    # a selection made on the kept screen is cropped from that PNG
+    viewer_log.unlink()
+    env["SNIP_PIN_SELECT"] = fake_selector(tmp_path, f'printf "3x2+2+1\\n{pngs[0]}"')
+    assert run([], env).returncode == 0
+    args = wait_for(viewer_log)
+    assert args[0].endswith("_x2_y1.png")
+    import gi
+    gi.require_version("GdkPixbuf", "2.0")
+    from gi.repository import GdkPixbuf
+    pb = GdkPixbuf.Pixbuf.new_from_file(args[0])
+    assert (pb.get_width(), pb.get_height()) == (3, 2)
+    for _ in range(100):                                    # this snip's own screen is kept too
+        if len(list(frames.glob("*.png"))) == 3:
+            break
+        time.sleep(0.05)
+    assert len(list(frames.glob("*.png"))) == 3
+    # frames = 0 keeps nothing new
+    env["SNIP_PIN_FRAMES"] = "0"
+    viewer_log.unlink()
+    env["SNIP_PIN_SELECT"] = fake_selector(tmp_path, 'printf "4x2+1+1"')
+    assert run([], env).returncode == 0
+    wait_for(viewer_log)
+    time.sleep(0.3)
+    assert len(list(frames.glob("*.png"))) == 3

@@ -8,6 +8,7 @@ usage: snip-select.py FRAME.ppm < input.json  ->  prints WxH+X+Y, exit 0
 input.json: {"monitors": [{"name", "x", "y", "width", "height", "scale", "transform"}, ...],
              "windows": [[x, y, w, h], ...], "elements": [[x, y, w, h], ...],
              "areas": ["WxH+X+Y", ...], "select": "WxH+X+Y" (optional, a selection to start with),
+             "frames": [{"png": path, "json": path, "time": unix seconds}, ...]  (earlier screens, newest first),
              "settings": {"border": "#rrggbb[aa]", "width": 1, "mask": "#rrggbbaa", "fill": "#rrggbbaa",
                           "size": 1, "hints": 1, "magnify": 9, "adjust": 0, "cursor": 0}}
 
@@ -24,6 +25,7 @@ pointer, a magnifier with the pixel colour, and a key-hint panel.
   1 / 2 / wheel        parent / child element  W A S D          move the pointer by 1 px
   Ctrl+A               this monitor, again: everything
   R / Shift+R          previous capture areas  F5               refresh the frozen frame
+  , / .                earlier / later frozen screen (the frames kept by earlier snips)
   C                    copy the colour under the pointer        Shift  HEX / RGB
   Q                    adjust mode on / off (a drag waits for Enter instead of capturing at once)
 """
@@ -68,7 +70,7 @@ HINTS = [("Enter", "confirm"), ("Esc", "abort"), ("drag / click", "select / take
          ("1 2 / wheel", "parent / child element"), ("Ctrl+A", "this monitor, again: everything"),
          ("R Shift+R", "previous capture areas"), ("W A S D", "move the pointer by 1 px"),
          ("C", "copy the colour"), ("Shift", "HEX / RGB"), ("F5", "refresh the frame"),
-         ("Q", "adjust mode: a drag waits for Enter")]
+         ("Q", "adjust mode: a drag waits for Enter"), (", .", "earlier / later screen")]
 
 
 def parse_color(spec, default):
@@ -178,6 +180,17 @@ def anchor_near(rect, px, py, grab=GRAB):
     return None
 
 
+def frame_label(age_seconds):
+    """'now', '12 s ago', '3 min ago', '2 h ago'."""
+    if age_seconds is None:
+        return "now"
+    if age_seconds < 60:
+        return f"{int(age_seconds)} s ago"
+    if age_seconds < 3600:
+        return f"{int(age_seconds // 60)} min ago"
+    return f"{age_seconds / 3600:.1f} h ago"
+
+
 def pixel_at(pixbuf, x, y):
     """(r, g, b) 0..255 of a pixbuf pixel, or None outside."""
     if not (0 <= x < pixbuf.get_width() and 0 <= y < pixbuf.get_height()):
@@ -199,6 +212,11 @@ class Selector:
     def __init__(self, app, frame, data):
         self.app = app
         self.frame = frame
+        self.live = (frame, [tuple(r) for r in data.get("windows", []) if len(r) == 4],
+                     [tuple(r) for r in data.get("elements", []) if len(r) == 4])   # the current screen
+        self.frames = [f for f in data.get("frames", []) if isinstance(f, dict) and f.get("png")]
+        self.frame_idx = -1                # -1 = the live frame, else an index into self.frames
+        self.frame_path = None             # the kept frame in use, printed after the geometry
         self.origin = None                 # top-left of the virtual screen (the frame's (0, 0))
         self.monitors = [monitor_rect(m) for m in data.get("monitors", [])]
         if not self.monitors:
@@ -271,8 +289,48 @@ class Selector:
 
     def finish(self, rect):
         rect = clamp_rect(rect, self.bounds)
-        self.result = format_geom(rect)
+        self.result = format_geom(rect) + (f"\n{self.frame_path}" if self.frame_path else "")
         self.app.quit()
+
+    def show_frame(self, step):
+        """`,` / `.`: an earlier or later kept screen instead of the live one; windows and
+        elements come from the JSON saved with that frame."""
+        if not self.frames:
+            return
+        idx = max(-1, min(len(self.frames) - 1, self.frame_idx + step))
+        if idx == self.frame_idx:
+            return
+        if idx == -1:
+            frame, windows, elements, path = self.live[0], self.live[1], self.live[2], None
+        else:
+            entry = self.frames[idx]
+            try:
+                frame = GdkPixbuf.Pixbuf.new_from_file(entry["png"])
+            except GLib.Error:
+                return
+            windows, elements = [], []
+            try:
+                with open(entry.get("json", ""), encoding="utf-8") as f:
+                    meta = json.load(f)
+                windows = [tuple(r) for r in meta.get("windows", []) if len(r) == 4]
+                elements = [tuple(r) for r in meta.get("elements", []) if len(r) == 4]
+            except (OSError, ValueError):
+                pass
+            path = entry["png"]
+        self.frame_idx, self.frame, self.frame_path = idx, frame, path
+        self.windows, self.elements = windows, elements
+        self.depth = 0
+        for w in self.windows_:
+            w.set_crop()
+        self.redraw()
+
+    def frame_age(self):
+        if self.frame_idx < 0:
+            return None
+        try:
+            return max(0.0, __import__("time").time() - float(self.frames[self.frame_idx].get("time", 0)))
+        except (TypeError, ValueError):
+            return None
 
     def abort(self, code=1):
         self.result = format_geom(self.selection) if code == 3 and self.selection else None
@@ -382,6 +440,10 @@ class Selector:
         elif lower == Gdk.KEY_q:
             self.adjust = not self.adjust
             self.redraw()
+        elif keyval == Gdk.KEY_comma:
+            self.show_frame(1)                              # earlier
+        elif keyval == Gdk.KEY_period:
+            self.show_frame(-1)                             # later, back to now
         elif name in ("Left", "Right", "Up", "Down"):
             step = 10 if shift else 1
             dx = {"Left": -step, "Right": step}.get(name, 0)
@@ -442,11 +504,15 @@ class Overlay(Gtk.Window):
         keys = Gtk.EventControllerKey()
         keys.connect("key-pressed", lambda c, kv, kc, st: self.sel.on_key(kv, st))
         self.add_controller(keys)
-        # the frame cropped to this monitor, as a cairo surface drawn at 1:1
+        self.set_crop()
+
+    def set_crop(self):
+        """The current frame cropped to this monitor (drawn at 1:1)."""
+        sel, rect = self.sel, self.rect
         fx, fy = rect[0] - sel.origin[0], rect[1] - sel.origin[1]
         fw = max(1, min(rect[2], sel.frame.get_width() - fx))
         fh = max(1, min(rect[3], sel.frame.get_height() - fy))
-        self.crop = sel.frame.new_subpixbuf(fx, fy, fw, fh) if fx >= 0 and fy >= 0 else sel.frame
+        self.crop = sel.frame.new_subpixbuf(fx, fy, fw, fh) if fx >= 0 and fy >= 0 and fw > 0 and fh > 0 else sel.frame
 
     def gdk_monitor(self):
         display = Gdk.Display.get_default()
@@ -684,6 +750,11 @@ class Overlay(Gtk.Window):
         mode = MODES[self.sel.mode]
         adjust = "on" if self.sel.adjust else "off"
         rows = [f"{k}\t{v}" for k, v in HINTS] + [f"detection\t{mode}", f"adjust mode\t{adjust}"]
+        if self.sel.frames:
+            n = len(self.sel.frames)
+            idx = self.sel.frame_idx
+            shown = "now" if idx < 0 else f"{frame_label(self.sel.frame_age())} ({idx + 1}/{n})"
+            rows.append(f"screen\t{shown}")
         layout.set_text("\n".join(rows), -1)
         tabs = Pango.TabArray.new(1, True)
         tabs.set_tab(0, Pango.TabAlign.LEFT, 110)

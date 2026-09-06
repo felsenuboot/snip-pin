@@ -47,8 +47,9 @@ GTK 4 viewer; no daemon, no portal.
   and as a file, and closes it. Copy-only and save-only modes for keys of their own.
 - 🕘 **History.** Snips are kept for a week, or for good if you star them: pin
   the last one again, pick one from a thumbnail grid, repeat the last capture
-  area, or pin the image that is in the clipboard; copied text is rendered
-  into an image and pinned too.
+  area, go back to the whole screen as it was at an earlier snip and snip
+  from that, or pin the image that is in the clipboard; copied text is
+  rendered into an image and pinned too.
 - 🖥️ **Whole screen.** Capture the monitor under the pointer, or every monitor,
   without a selection.
 - ⚙️ **A config file.** Keys and mouse buttons rebindable, colours, save and
@@ -156,6 +157,7 @@ the keys:
 | Detection | `Tab` cycles both / windows / elements / off; `1` / `2` or the wheel pick the parent or child element |
 | Whole screen | `Ctrl+A` selects the monitor under the pointer, again every monitor |
 | Previous areas | `R` / `Shift+R` step through the last capture areas |
+| Earlier screens | `,` shows the screen as it was at an earlier snip (the last `frames` = 20 are kept), `.` comes back towards now; select and confirm as usual to snip from that moment |
 | Colour | `C` copies the colour under the pointer, `Shift` switches HEX / RGB |
 | Pointer | `W A S D` move it by one pixel; `F5` refreshes the frozen frame |
 
@@ -284,6 +286,7 @@ the effective settings and where each comes from.
 | `sel_adjust` | `0` | `1`: a drag leaves an adjustable selection with anchors; `Enter` or a double-click confirms |
 | `cursor` | `0` | `1` includes the mouse cursor in the capture |
 | `areas` | `8` | capture areas remembered for `repeat` |
+| `frames` | `20` | whole screens kept in `~/.cache/snip-pin/frames` for `,` / `.` in the overlay (PNG, several MB each); `0` turns it off |
 | `default_tool` | `none` | tool active as soon as a pin opens: `rect`, `ellipse`, `arrow`, `pen`, `text`, `counter`, `marker`, `blur` |
 | `zoom_at_pointer` | `1` | the wheel zooms around the pointer, so the pin moves; `0` zooms from the top-left corner |
 | `smooth` | `1` | bilinear scaling; `0` shows crisp pixel blocks when zoomed in (also a menu toggle) |

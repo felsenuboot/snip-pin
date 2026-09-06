@@ -97,6 +97,7 @@ SEL_ADJUST=$(int_or SNIP_PIN_SEL_ADJUST 0)                # overlay: 1 = a drag 
 case "${SNIP_PIN_SELECTOR:-auto}" in overlay|slurp|auto) SELECTOR=${SNIP_PIN_SELECTOR:-auto} ;; *) SELECTOR=auto ;; esac
 CURSOR=$(int_or SNIP_PIN_CURSOR 0)                        # 1 = include the mouse cursor in the capture
 AREAS=$(int_or SNIP_PIN_AREAS 8)                          # how many capture areas `repeat` remembers
+FRAMES=$(int_or SNIP_PIN_FRAMES 20)                       # whole screens kept for the overlay's `,` / `.`
 FILENAME="${SNIP_PIN_FILENAME:-}"                         # strftime pattern for saved files
 [[ -n "$FILENAME" && "$FILENAME" != */* ]] || FILENAME='pin_%Y%m%d_%H%M%S'
 case "${SNIP_PIN_FORMAT:-png}" in jpg|jpeg|.jpg|.jpeg) FORMAT=jpeg; EXT=jpg ;; webp|.webp) FORMAT=webp; EXT=webp ;; *) FORMAT=png; EXT=png ;; esac
@@ -192,6 +193,31 @@ pb.savev(sys.argv[2], sys.argv[3], ["quality"], [sys.argv[4]])
 PY
     fi
     echo "$dest"
+}
+
+# The whole screens kept for the overlay's `,` / `.`: newest first, as JSON for jq.
+kept_frames() {
+    local d="$CACHE/frames" f
+    [[ -d "$d" && "$FRAMES" -gt 0 ]] || { echo '[]'; return; }
+    for f in "$d"/*.png; do
+        [[ -f "$f" ]] || continue
+        printf '%s\t%s\t%s\n' "$(stat -c %Y "$f")" "$f" "${f%.png}.json"
+    done | sort -rn | head -n "$FRAMES" | jq -R -s -c 'split("\n") | map(select(length > 0) | split("\t") | {time: (.[0] | tonumber), png: .[1], json: .[2]})'
+}
+
+# Keep the frozen screen (PNG, in the background) with its window and element
+# rectangles, and prune to FRAMES. Nothing is kept when the setting is 0.
+keep_frame() {
+    local src=$1 stamp dir="$CACHE/frames"
+    [[ "$FRAMES" -gt 0 && -s "$src" ]] || return 0
+    mkdir -p "$dir"
+    stamp=$(date +%Y%m%d_%H%M%S_%N)
+    jq -n -c --arg rects "$rects" --rawfile elems "${elems:-/dev/null}" --argjson ox "${ox:-0}" --argjson oy "${oy:-0}" '
+        def boxes: [splits("\n") | select(length > 0) | capture("(?<x>-?[0-9]+),(?<y>-?[0-9]+) (?<w>[0-9]+)x(?<h>[0-9]+)")
+                    | [.x, .y, .w, .h] | map(tonumber)];
+        {origin: [$ox, $oy], windows: ($rects | boxes), elements: ($elems | boxes)}' > "$dir/$stamp.json" 2>/dev/null
+    ( "$HERE/pin-view.py" --keep-frame "$src" "$dir/$stamp.png" 2>/dev/null; rm -f "$src"
+      command ls -t "$dir"/*.png 2>/dev/null | tail -n +"$((FRAMES + 1))" | while read -r old; do rm -f "$old" "${old%.png}.json"; done ) &
 }
 
 # Pin a cached file; the position comes from its name when present. All pins
@@ -413,6 +439,7 @@ PY
         show sel_adjust 0
         show cursor 0
         show areas 8
+        show frames 20
         show action copy+pin
         show autosave_dir ''
         show default_tool none
@@ -463,6 +490,7 @@ else
     elems='' frame='' pid_detect='' pid_freeze='' lua_cfg=''
     cleanup() {
         [[ -n "$pid_freeze" ]] && kill "$pid_freeze" 2>/dev/null
+        [[ -n "$elems" && -f "$elems" ]] && { elems_kept=$(mktemp); cp "$elems" "$elems_kept"; }   # for keep_frame
         rm -f "$elems" "$STATE/selecting" "$STATE/abort" "$STATE/slurp"    # the frame is kept for the capture
         if [[ -n "$lua_cfg" ]]; then
             hyprctl eval 'hl.unbind("mouse:274")' >/dev/null 2>&1
@@ -514,13 +542,14 @@ else
             [[ -s "$frame" ]] || grim -s 1 -t ppm "$frame"
             input=$(jq -n -c --argjson mon "$(hyprctl monitors -j)" --arg rects "$rects" --rawfile elems "$elems" \
                     --rawfile areas <(cat "$CACHE/areas" 2>/dev/null; true) --arg select "$select_geom" \
+                    --argjson frames "$(kept_frames)" \
                     --arg border "$SEL_BORDER" --argjson width "$SEL_WIDTH" --arg mask "$SEL_MASK" --arg fill "$SEL_FILL" \
                     --argjson size "$SEL_SIZE" --argjson hints "$SEL_HINTS" --argjson magnify "$SEL_MAGNIFY" --argjson adjust "$SEL_ADJUST" '
                 def boxes: [splits("\n") | select(length > 0) | capture("(?<x>-?[0-9]+),(?<y>-?[0-9]+) (?<w>[0-9]+)x(?<h>[0-9]+)")
                             | [.x, .y, .w, .h] | map(tonumber)];
                 {monitors: [$mon[] | {name, x, y, width, height, scale, transform}],
                  windows: ($rects | boxes), elements: ($elems | boxes),
-                 areas: [$areas | splits("\n") | select(length > 0)], select: $select,
+                 areas: [$areas | splits("\n") | select(length > 0)], select: $select, frames: $frames,
                  settings: {border: $border, width: $width, mask: $mask, fill: $fill, size: $size,
                             hints: $hints, magnify: $magnify, adjust: $adjust}}')
             geom_file=$(mktemp)
@@ -528,8 +557,8 @@ else
             echo $! > "$STATE/slurp"
             wait $!
             rc=$?
-            geom=$(<"$geom_file"); rm -f "$geom_file"
-            log "overlay rc=$rc geom=$geom"
+            geom=$(head -n 1 "$geom_file"); used_frame=$(sed -n 2p "$geom_file"); rm -f "$geom_file"
+            log "overlay rc=$rc geom=$geom frame=${used_frame:-live}"
             if [[ $rc -eq 3 ]]; then
                 # F5: grab a fresh frame, but only once the old overlay is off the
                 # screen, or the new frame is a picture of the old overlay
@@ -572,6 +601,8 @@ else
     [[ $rc -ne 0 || -z "$geom" ]] && { rm -f "$frame"; exit 0; }
 fi
 frame="${frame:-}"
+elems="${elems_kept:-}"
+rects="${rects:-}"
 
 IFS='x+' read -r W H X Y <<< "$geom"
 [[ "$W" -lt 1 || "$H" -lt 1 ]] && exit 0
@@ -588,12 +619,20 @@ file="$CACHE/$(date +%Y%m%d_%H%M%S_%N)_x${X}_y${Y}.png"
 # showed, nothing of the overlay in it) unless the cursor is wanted or the
 # region's output is scaled (the frame is at scale 1); grim grabs the live screen otherwise.
 captured=''
+read -r ox oy < <(hyprctl monitors -j 2>/dev/null | jq -r '"\([.[].x] | min) \([.[].y] | min)"' 2>/dev/null)
+[[ "${ox:-}" =~ ^-?[0-9]+$ ]] || { ox=0; oy=0; }
+used_frame="${used_frame:-}"
+if [[ -n "$used_frame" && -s "$used_frame" ]]; then
+    # a screen from the history (`,` in the overlay): crop it with the origin it was saved with
+    read -r kx ky < <(jq -r '.origin | "\(.[0]) \(.[1])"' "${used_frame%.png}.json" 2>/dev/null)
+    [[ "${kx:-}" =~ ^-?[0-9]+$ ]] || { kx=$ox; ky=$oy; }
+    "$HERE/pin-view.py" --crop "$used_frame" "$kx" "$ky" "$geom" "$file" 2>/dev/null && captured=history
+fi
 scale_ok=$(hyprctl monitors -j 2>/dev/null | jq -r --argjson x "$X" --argjson y "$Y" '
     [.[] | select(.x <= $x and $x < .x + .width / .scale and .y <= $y and $y < .y + .height / .scale)]
     | if length == 0 then "true" else (all(.[]; .scale == 1) | tostring) end')
-if [[ -n "$frame" && -s "$frame" && "$CURSOR" -eq 0 && "$scale_ok" == true ]]; then
-    read -r ox oy < <(hyprctl monitors -j | jq -r '"\([.[].x] | min) \([.[].y] | min)"')
-    if "$HERE/pin-view.py" --crop "$frame" "${ox:-0}" "${oy:-0}" "$geom" "$file" 2>/dev/null; then
+if [[ -z "$captured" && -n "$frame" && -s "$frame" && "$CURSOR" -eq 0 && "$scale_ok" == true ]]; then
+    if "$HERE/pin-view.py" --crop "$frame" "$ox" "$oy" "$geom" "$file" 2>/dev/null; then
         captured=frame
     fi
 fi
@@ -604,7 +643,8 @@ if [[ -z "$captured" ]]; then
     grim -g "${X},${Y} ${W}x${H}" "${grim_opts[@]}" "$file" || { log "grim failed"; rm -f "$frame"; exit 1; }
     captured=grim
 fi
-rm -f "$frame"
+if [[ -n "$frame" && -s "$frame" && "$FRAMES" -gt 0 ]]; then keep_frame "$frame"; else rm -f "$frame"; fi
+[[ -n "${elems_kept:-}" ]] && rm -f "$elems_kept"
 log "captured $file from $captured"
 # autosave_dir: every capture also lands there, whatever happens to the pin
 if [[ -n "${SNIP_PIN_AUTOSAVE_DIR:-}" ]]; then
