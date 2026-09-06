@@ -27,8 +27,9 @@ GTK 4 viewer; no daemon, no portal.
 
 - 📌 **Pins stay put.** Every snip opens as a floating, pinned window at the
   capture position and shows up in the dock like any other window. Hide them
-  all and bring them back, or make a pin click-through so it lies over your
-  editor while you type underneath.
+  all and bring them back, keep them in groups and switch between them, or
+  make a pin click-through so it lies over your editor while you type
+  underneath.
 - 🎯 **Snaps to windows and elements.** Windows and the rectangles inside them
   (images, cards, panels, table cells) highlight under the pointer; a click
   snaps to one, a drag selects freely. Element detection is pure numpy on the
@@ -202,6 +203,7 @@ opened from the picker appear centred.
 | `snip-pin.sh screen` | capture the monitor under the pointer without a selection and pin it; `screen all` captures every monitor as one image |
 | `snip-pin.sh repeat` | capture the area of the last snip again (a progress bar, a chat window); `repeat 3` the third-last area |
 | `snip-pin.sh reopen` | bring the last closed pin back as it was (the last `reopen` = 5 closed pins are kept for the session) |
+| `snip-pin.sh group next` | show the next group of pins instead of the current one (`prev`, or a number); every pin belongs to a group, new pins join the current one, *Move to group* in a pin's menu moves it |
 | `snip-pin.sh toggle` | hide every pin, or show them all again where they were (annotations and zoom stay) |
 | `snip-pin.sh close-all` | close every pin; asks first when there are several |
 | `snip-pin.sh clickthrough` | make every pin click-through, or solid again if any is click-through |

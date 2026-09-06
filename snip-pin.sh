@@ -24,6 +24,7 @@
 #   snip-pin.sh close-all  close every pin (asks first when there are several)
 #   snip-pin.sh clickthrough  toggle click-through for every pin (the mouse goes to what is below)
 #   snip-pin.sh reopen     bring the last closed pin back as it was (position, zoom, annotations)
+#   snip-pin.sh group next|prev|N  show another group of pins (new pins join the current group)
 #   snip-pin.sh clear      empty the history (kept snips stay)
 #   snip-pin.sh abort      end the selection this script started (right-click bind)
 #   snip-pin.sh doctor     check the dependencies (exit 1 if a required one is missing)
@@ -306,10 +307,14 @@ PY
         fi ;;
     abort)
         abort_selection; exit 0 ;;
-    toggle|close-all|clickthrough|reopen)
+    toggle|close-all|clickthrough|reopen|group)
         # a request to the running viewer; without one only reopen starts a new one
         cmd=$1; [[ "$cmd" == clickthrough ]] && cmd=click-through
         if [[ "$cmd" == reopen ]]; then setsid -f "$VIEWER" --reopen >/dev/null 2>&1; exit 0; fi
+        if [[ "$cmd" == group ]]; then
+            [[ "${2:-next}" =~ ^(next|prev|[1-9][0-9]*)$ ]] || { echo "usage: snip-pin.sh group next|prev|N" >&2; exit 1; }
+            exec "$VIEWER" --group "${2:-next}"
+        fi
         exec "$VIEWER" "--$cmd" ;;
     doctor)
         missing=0
@@ -405,7 +410,7 @@ PY
         exit 0 ;;
     --version|-V)
         cat "$HERE/VERSION"; exit 0 ;;
-    *)  echo "usage: snip-pin.sh [copy|save|last|history|clipboard|pin FILE|screen [all]|repeat [N]|toggle|close-all|clickthrough|reopen|clear|doctor|config|log|--version]" >&2
+    *)  echo "usage: snip-pin.sh [copy|save|last|history|clipboard|pin FILE|screen [all]|repeat [N]|toggle|close-all|clickthrough|reopen|group [next|prev|N]|clear|doctor|config|log|--version]" >&2
         echo "  (no argument: select a region, capture it, then copy and pin it, or what \`action\` says)" >&2; exit 2 ;;
 esac
 

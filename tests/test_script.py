@@ -503,6 +503,13 @@ def test_toggle_and_close_all_go_to_the_viewer(tmp_path):
     log.unlink()
     assert run(["reopen"], env).returncode == 0
     assert wait_for(log) == ["--reopen"]
+    log.unlink()
+    assert run(["group"], env).returncode == 0
+    assert wait_for(log) == ["--group", "next"]
+    log.unlink()
+    assert run(["group", "3"], env).returncode == 0
+    assert wait_for(log) == ["--group", "3"]
+    assert run(["group", "x"], env).returncode == 1
 
 
 def test_save_mode_honours_filename_and_format(tmp_path):
