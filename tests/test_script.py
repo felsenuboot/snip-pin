@@ -734,3 +734,17 @@ def test_overlay_refresh_and_fallback(tmp_path):
     assert run([], env).returncode == 0
     time.sleep(0.3)
     assert not viewer_log.exists()
+
+
+def test_config_edit_creates_the_file_and_opens_the_editor(tmp_path):
+    env = make_env(tmp_path)
+    env["EDITOR"] = str(tmp_path / "ed.sh")
+    (tmp_path / "ed.sh").write_text(f'#!/bin/sh\necho "edit $1" > "{tmp_path}/ed.log"\n')
+    (tmp_path / "ed.sh").chmod(0o755)
+    r = run(["config", "--edit"], env)
+    assert r.returncode == 0 and "created" in r.stdout
+    cfg = tmp_path / ".config" / "snip-pin" / "config"
+    assert cfg.exists() and "keep_days" in cfg.read_text()
+    assert (tmp_path / "ed.log").read_text().strip() == f"edit {cfg}"
+    r = run(["config", "--edit"], env)                                      # second time: no re-creation
+    assert "created" not in r.stdout

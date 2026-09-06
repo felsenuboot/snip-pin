@@ -30,6 +30,7 @@
 #   snip-pin.sh abort      end the selection this script started (right-click bind)
 #   snip-pin.sh doctor     check the dependencies (exit 1 if a required one is missing)
 #   snip-pin.sh config     print the effective settings and where each comes from
+#   snip-pin.sh config --edit  create ~/.config/snip-pin/config from config.example if needed, open it in $EDITOR
 #   snip-pin.sh log [-f]   show the debug log (debug = 1 in the config), -f follows it
 #   snip-pin.sh --version  print the version
 # Pressing the snip key twice within tap_ms (default 300) aborts the
@@ -378,6 +379,13 @@ PY
         [[ $missing -eq 0 ]] && echo "all required tools found" || echo "required tools missing" >&2
         exit $missing ;;
     config)
+        if [[ "${2:-}" == --edit || "${2:-}" == -e ]]; then
+            # the file most people never find: create it from the example, then edit it
+            if [[ ! -e "$CONFIG" ]]; then
+                mkdir -p "${CONFIG%/*}" && cp "$HERE/config.example" "$CONFIG" && echo "created $CONFIG from config.example"
+            fi
+            exec "${VISUAL:-${EDITOR:-xdg-open}}" "$CONFIG"
+        fi
         # every setting with its effective value and where it comes from
         if [[ -r "$CONFIG" ]]; then echo "config file: $CONFIG"; else echo "config file: $CONFIG (not found, defaults)"; fi
         show() {   # key, default
@@ -440,7 +448,7 @@ PY
         exit 0 ;;
     --version|-V)
         cat "$HERE/VERSION"; exit 0 ;;
-    *)  echo "usage: snip-pin.sh [copy|save|last|history|clipboard|pin FILE|screen [all]|repeat [N]|color|toggle|close-all|clickthrough|reopen|group [next|prev|N]|clear|doctor|config|log|--version]" >&2
+    *)  echo "usage: snip-pin.sh [copy|save|last|history|clipboard|pin FILE|screen [all]|repeat [N]|color|toggle|close-all|clickthrough|reopen|group [next|prev|N]|clear|doctor|config [--edit]|log|--version]" >&2
         echo "  (no argument: select a region, capture it, then copy and pin it, or what \`action\` says)" >&2; exit 2 ;;
 esac
 
