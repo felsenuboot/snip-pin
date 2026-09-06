@@ -292,3 +292,44 @@ def test_doctor_reports_and_exits_by_required_tools(tmp_path):
     assert r.returncode == 1, r.stdout + r.stderr
     for tool in ("grim", "slurp", "wl-copy", "hyprctl"):
         assert f"{tool:<12} MISSING" in r.stdout
+
+
+def test_config_file_fills_in_and_environment_wins(tmp_path):
+    env = make_env(tmp_path)
+    cfg = tmp_path / ".config" / "snip-pin"
+    cfg.mkdir(parents=True)
+    (cfg / "config").write_text(
+        "# comment\nkeep_days = 3   # trailing comment\n  tap_ms=999\nborder = #123456\n"
+        "save_dir = ~/Shots  # synced\nelements_budget_ms = 42\nbogus line\n$(touch /tmp/never)\n"
+        "[keys]\ncopy = ctrl+shift+c\n[mouse]\nright = menu\n")
+    env["SNIP_PIN_TAP_MS"] = "111"
+    r = run(["config"], env)
+    assert r.returncode == 0, r.stderr
+    out = r.stdout
+    assert "keep_days" in out and "= 3 " in out and "(file)" in out
+    assert "tap_ms" in out and "= 111 " in out and "(environment)" in out
+    assert "border" in out and "#123456" in out
+    assert "= ~/Shots " in out and "synced" not in out
+    assert "elements_budget_ms" in out and "= 42 " in out
+    assert "copy" not in out and "right" not in out             # sections are the viewer's business
+    assert not os.path.exists("/tmp/never")
+
+
+def test_config_defaults_without_a_file(tmp_path):
+    r = run(["config"], make_env(tmp_path))
+    assert r.returncode == 0 and "not found" in r.stdout
+    assert "keep_days" in r.stdout and "= 7 " in r.stdout and "(default)" in r.stdout
+
+
+def test_config_file_keep_days_is_applied(tmp_path):
+    env = make_env(tmp_path)
+    cfg = tmp_path / ".config" / "snip-pin"
+    cfg.mkdir(parents=True)
+    (cfg / "config").write_text("keep_days = 2\n")
+    cache = tmp_path / "cache" / "snip-pin"
+    (cache / "kept").mkdir(parents=True)
+    stale = cache / "stale.png"
+    stale.write_bytes(b"")
+    os.utime(stale, (time.time() - 5 * 86400,) * 2)               # older than 2 days, younger than 7
+    run(["bogus"], env)
+    assert not stale.exists()

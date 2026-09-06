@@ -8,6 +8,10 @@ layout) may still change.
 
 ## [Unreleased]
 
+### Added
+- Configuration file `~/.config/snip-pin/config` (`key = value`, see `config.example`) read by the script and the viewer; environment variables still override. The viewer re-reads it whenever a pin is opened, so a change applies to the next pin even though all pins share one process. `snip-pin.sh config` prints the effective settings with their source (#87).
+- Rebindable keys and mouse buttons on a pin: `[keys]` maps actions (`copy`, `save`, `undo`, `tool_arrow`, ...) to bindings such as `ctrl+shift+c`; `[mouse]` sets what right-click, double-click and middle-click do (`copy`, `save`, `close`, `menu`, `reset_zoom`, `none`). Menus show the configured keys (#87).
+
 ## [0.3.0] – 2026-09-06
 
 The editor milestone: every item verified live on Hyprland 0.56.2 with input injection.
