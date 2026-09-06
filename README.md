@@ -1,53 +1,81 @@
-# <img src="snip-pin.svg" width="40" align="top" alt=""> snip-pin
+<div align="center">
+  <img src="snip-pin.svg" width="128" alt="">
+  <h1>snip-pin</h1>
+  <p>Snip and pin for Hyprland, the Snipaste way</p>
+  <a href="https://github.com/felsenuboot/snip-pin/actions/workflows/ci.yml"><img src="https://github.com/felsenuboot/snip-pin/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/felsenuboot/snip-pin/releases"><img src="https://img.shields.io/github/v/release/felsenuboot/snip-pin?color=4a86cf" alt="Release"></a>
+</div>
 
-[![CI](https://github.com/felsenuboot/snip-pin/actions/workflows/ci.yml/badge.svg)](https://github.com/felsenuboot/snip-pin/actions/workflows/ci.yml)
-
-Snipaste-style **snip and pin** for [Hyprland](https://hyprland.org). Press a
-key, pick a region, a window or an element inside a window, and the screenshot
-stays on screen exactly where it was taken, floating above everything. Drag it
-around, zoom it, fade it, annotate it, copy or save it.
+snip-pin is a screenshot tool for [Hyprland](https://hyprland.org) in the
+style of [Snipaste](https://www.snipaste.com). Press a key, pick a region, a
+window or an element inside a window, and the screenshot stays on screen
+exactly where it was taken, floating above everything. Drag it around, zoom
+it, fade it, annotate it, copy or save it. `slurp`, `grim`, `wl-copy` and a
+GTK 4 viewer; no daemon, no portal.
 
 <p align="center">
   <img src="docs/drag-zoom.gif" width="650" alt="A pinned snip being dragged, zoomed and faded">
 </p>
 
 > [!NOTE]
-> **Status and disclaimer.** This is a personal project, written largely with
-> Claude Code and reviewed by a human, but not audited. It works on my machine
-> (Arch, Hyprland, YubiKey 5). Use at your own risk; there is no warranty.
-> Issues and pull requests are welcome. This project is not affiliated with Snipaste or Hyprland.
+> A personal project, written largely with Claude Code and reviewed by a
+> human, not audited. It works on my machine (Arch, Hyprland). No warranty;
+> not affiliated with Snipaste or Hyprland. Issues and pull requests are
+> welcome.
 
+## Features
 
-## What it does
+- 📌 **Pins stay put.** Every snip opens as a floating, pinned window at the
+  capture position and shows up in the dock like any other window. Hide them
+  all and bring them back, or make a pin click-through so it lies over your
+  editor while you type underneath.
+- 🎯 **Snaps to windows and elements.** Windows and the rectangles inside them
+  (images, cards, panels, table cells) highlight under the pointer; a click
+  snaps to one, a drag selects freely. Element detection is pure numpy on the
+  frozen frame, about 40 ms.
+- ✏️ **Annotate on the pin.** Rectangle, ellipse, arrow, pen, text (input
+  methods and Compose work), numbered steps, marker, blur and crop, with undo
+  and redo. Annotations are baked into what you copy or save; the file on
+  disk stays untouched.
+- 📋 **Clipboard first.** Every snip lands in the clipboard as well; `Ctrl+C`,
+  a double-click or a right-click on a pin copies it again, annotations
+  included, and closes it. Copy-only and save-only modes for keys of their own.
+- 🕘 **History.** Snips are kept for a week, or for good if you star them: pin
+  the last one again, pick one from a thumbnail grid, repeat the last capture
+  area, or pin the image that is in the clipboard.
+- 🖥️ **Whole screen.** Capture the monitor under the pointer, or every monitor,
+  without a selection.
+- ⚙️ **A config file.** Keys and mouse buttons rebindable, colours, save and
+  autosave folders, the selection's look, all in `~/.config/snip-pin/config`,
+  re-read on the fly.
+- ⚡ **Fast.** All pins share one process, so a second pin appears in about
+  50 ms; the selection is up before the screen has finished freezing.
 
 | Snap to windows and elements | Annotate on the pin |
 |---|---|
 | ![Selection: the image under the pointer is highlighted](docs/select.png) | ![A pin with rectangle, arrow, text and blur annotations and the toolbar](docs/pin.png) |
-| Windows and the rectangles inside them (images, cards, panels) highlight under the pointer. A click snaps to one, a drag selects freely, right-click or `Esc` aborts. | The pin is the editor: rectangle, ellipse, arrow, pen, text, numbered steps, marker and blur, baked into what you copy or save. The file on disk stays untouched. |
 
-- **Pins stay put.** Every snip opens as a floating, pinned window at the
-  capture position and shows up in the dock like any other window.
-- **Clipboard first.** Every snip lands in the clipboard as well. Right-click
-  or `Ctrl+C` on a pin copies it again, annotations included, and closes it.
-- **History.** Snips are kept for a week, or for good if you star them: pin
-  the last one again, pick one from a thumbnail grid, or pin the image that is
-  in the clipboard.
-- **No daemon, no portal.** `slurp`, `grim` and `wl-copy` plus a GTK4 viewer.
-  All pins share one process, so a second pin appears in about 50 ms.
-- **Hyprland only, for now.** Other wlroots compositors are on the roadmap
-  ([milestone v0.4.0](https://github.com/felsenuboot/snip-pin/milestone/3));
-  GNOME and macOS are not, see [docs/decisions.md](docs/decisions.md).
+Hyprland only, for now. Other wlroots compositors are on the roadmap
+([milestone v0.4.0](https://github.com/felsenuboot/snip-pin/milestone/3));
+GNOME and macOS are not, see [docs/decisions.md](docs/decisions.md).
 
 ## Install
 
+Python 3.11+, PyGObject, GTK 4, `grim`, `slurp`, `wl-clipboard` and `jq`.
+`hyprpicker` (freezes the screen during selection), `python-numpy` (element
+snapping) and `libnotify` (toasts) are optional.
+
+| Distribution | Packages |
+| --- | --- |
+| Arch | `grim slurp wl-clipboard jq python-gobject gtk4 hyprpicker python-numpy libnotify` |
+| Fedora | `grim slurp wl-clipboard jq python3-gobject gtk4 hyprpicker python3-numpy libnotify` |
+| Debian, Ubuntu | `grim slurp wl-clipboard jq python3-gi python3-gi-cairo gir1.2-gtk-4.0 python3-numpy libnotify-bin` (no hyprpicker package) |
+
 ```
-sudo pacman -S --needed grim slurp wl-clipboard jq python-gobject gtk4 hyprpicker python-numpy
 git clone https://github.com/felsenuboot/snip-pin ~/.local/share/snip-pin
 ~/.local/share/snip-pin/install.sh
 ```
-
-`hyprpicker` (freezes the screen during selection), `python-numpy` (element
-snapping) and `libnotify` (toasts) are optional. `install.sh` adds a desktop
+ `install.sh` adds a desktop
 entry and icon so docks show a proper icon for pins, plus an *Open with → Pin
 image* entry for file managers, and ends with `snip-pin.sh doctor`, which
 lists what is installed and what is missing. `install.sh --uninstall` removes
@@ -61,6 +89,8 @@ hl.bind("PRINT", hl.dsp.exec_cmd("~/.local/share/snip-pin/snip-pin.sh"), { descr
 hl.bind("SHIFT + PRINT", hl.dsp.exec_cmd("~/.local/share/snip-pin/snip-pin.sh last"), { description = "Pin the last snip again" })
 hl.bind("SUPER + PRINT", hl.dsp.exec_cmd("~/.local/share/snip-pin/snip-pin.sh history"), { description = "Snip history" })
 hl.bind("CTRL + PRINT", hl.dsp.exec_cmd("~/.local/share/snip-pin/snip-pin.sh clipboard"), { description = "Pin the clipboard image" })
+hl.bind("SUPER + SHIFT + PRINT", hl.dsp.exec_cmd("~/.local/share/snip-pin/snip-pin.sh screen"), { description = "Pin the whole monitor" })
+hl.bind("SUPER + H", hl.dsp.exec_cmd("~/.local/share/snip-pin/snip-pin.sh toggle"), { description = "Hide or show every pin" })
 
 hl.window_rule({
     name = "snip-pin",
@@ -83,6 +113,8 @@ bind = , PRINT, exec, ~/.local/share/snip-pin/snip-pin.sh
 bind = SHIFT, PRINT, exec, ~/.local/share/snip-pin/snip-pin.sh last
 bind = SUPER, PRINT, exec, ~/.local/share/snip-pin/snip-pin.sh history
 bind = CTRL, PRINT, exec, ~/.local/share/snip-pin/snip-pin.sh clipboard
+bind = SUPER SHIFT, PRINT, exec, ~/.local/share/snip-pin/snip-pin.sh screen
+bind = SUPER, H, exec, ~/.local/share/snip-pin/snip-pin.sh toggle
 
 windowrulev2 = float, class:^(snip-pin)$
 windowrulev2 = pin, class:^(snip-pin)$
@@ -203,8 +235,7 @@ style: right-click opens the menu, `double = close`). Modifiers are `ctrl`,
 `shift`, `alt`, `super`; several bindings are separated by spaces; an empty
 value unbinds. Colours stay on the digits.
 
-<details>
-<summary>Design notes and testing</summary>
+## Development
 
 - **Four files.** `snip-pin.sh` freezes the screen, feeds `slurp` with window
   and element rectangles, captures with `grim`, copies with `wl-copy` and
@@ -242,8 +273,17 @@ value unbinds. Colours stay on the digits.
   annotation renderer, the cache listing and the script's subcommands. CI runs
   it together with Ruff and ShellCheck.
 
-</details>
+## Roadmap
 
-## License
+The Snipaste comparison is filed as issues labelled
+[`snipaste-parity`](https://github.com/felsenuboot/snip-pin/issues?q=is%3Aissue+label%3Asnipaste-parity):
+the selection overlay with magnifier and colour picker (#73 and its parts),
+rotation, thumbnail mode, OCR, custom commands, a text-to-image paste and
+more. Portability to other compositors is
+[milestone v0.4.0](https://github.com/felsenuboot/snip-pin/milestone/3).
 
-MIT
+## Name and licence
+
+*Snip* for the selection, *pin* for what happens to it; the two words are
+what Snipaste's name is made of as well. MIT licence, see
+[LICENSE](LICENSE).
