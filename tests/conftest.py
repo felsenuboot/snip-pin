@@ -34,3 +34,8 @@ def view():
 @pytest.fixture(scope="session")
 def history():
     return load("pin-history")
+
+
+@pytest.fixture(scope="session")
+def select():
+    return load("snip-select")

@@ -133,12 +133,21 @@ def fake_tools(tmp_path, geom="400x300+600+400", slurp_rc=0):
     return b, log
 
 
+def fake_selector(tmp_path, body):
+    """A stand-in for snip-select.py: `body` is shell run with the frame in $1 and the JSON on stdin."""
+    p = tmp_path / "select.sh"
+    p.write_text("#!/bin/sh\n" + body + "\n")
+    p.chmod(0o755)
+    return str(p)
+
+
 def test_selection_path_with_fake_tools(tmp_path):
     viewer_log = tmp_path / "viewer.log"
     env = make_env(tmp_path, viewer_log)
     b, log = fake_tools(tmp_path)
     env["PATH"] = f"{b}:{env['PATH']}"
     env["SNIP_NO_ELEMENTS"] = "1"
+    env["SNIP_PIN_SELECTOR"] = "slurp"
     r = run([], env)
     assert r.returncode == 0, r.stderr
     args = wait_for(viewer_log)
@@ -160,6 +169,7 @@ def test_aborted_selection_captures_nothing(tmp_path):
     env = make_env(tmp_path, tmp_path / "viewer.log")
     b, log = fake_tools(tmp_path, geom="", slurp_rc=1)
     env["PATH"] = f"{b}:{env['PATH']}"
+    env["SNIP_PIN_SELECTOR"] = "slurp"
     env["SNIP_NO_ELEMENTS"] = "1"
     assert run([], env).returncode == 0
     assert "grim" not in log.read_text()
@@ -170,6 +180,7 @@ def test_corrupt_double_tap_state_is_ignored(tmp_path):
     env = make_env(tmp_path, tmp_path / "viewer.log")
     b, log = fake_tools(tmp_path)
     env["PATH"] = f"{b}:{env['PATH']}"
+    env["SNIP_PIN_SELECTOR"] = "slurp"
     env["SNIP_NO_ELEMENTS"] = "1"
     state = tmp_path / "run" / "snip-pin"
     state.mkdir(parents=True)
@@ -342,6 +353,7 @@ def test_selection_look_from_config_with_validation(tmp_path):
     env = make_env(tmp_path, tmp_path / "viewer.log")
     b, log = fake_tools(tmp_path)
     env["PATH"] = f"{b}:{env['PATH']}"
+    env["SNIP_PIN_SELECTOR"] = "slurp"
     env["SNIP_NO_ELEMENTS"] = "1"
     cfg = tmp_path / ".config" / "snip-pin"
     cfg.mkdir(parents=True)
@@ -355,6 +367,7 @@ def test_cursor_setting_adds_grim_flag(tmp_path):
     env = make_env(tmp_path, tmp_path / "viewer.log")
     b, log = fake_tools(tmp_path)
     env["PATH"] = f"{b}:{env['PATH']}"
+    env["SNIP_PIN_SELECTOR"] = "slurp"
     env["SNIP_NO_ELEMENTS"] = "1"
     env["SNIP_PIN_CURSOR"] = "1"
     assert run([], env).returncode == 0
@@ -423,6 +436,7 @@ def test_copy_mode_copies_without_a_pin(tmp_path):
     env = make_env(tmp_path, viewer_log)
     b, log = fake_tools(tmp_path)
     env["PATH"] = f"{b}:{env['PATH']}"
+    env["SNIP_PIN_SELECTOR"] = "slurp"
     env["SNIP_NO_ELEMENTS"] = "1"
     assert run(["copy"], env).returncode == 0
     tools = log.read_text()
@@ -436,6 +450,7 @@ def test_save_mode_saves_to_save_dir_without_copy_or_pin(tmp_path):
     env = make_env(tmp_path, viewer_log)
     b, log = fake_tools(tmp_path)
     env["PATH"] = f"{b}:{env['PATH']}"
+    env["SNIP_PIN_SELECTOR"] = "slurp"
     env["SNIP_NO_ELEMENTS"] = "1"
     env["SNIP_PIN_SAVE_DIR"] = "~/Shots/$USER/${KIND}"
     env["USER"] = "me"
@@ -454,6 +469,7 @@ def test_action_setting_controls_the_bare_command(tmp_path):
     env = make_env(tmp_path, viewer_log)
     b, log = fake_tools(tmp_path)
     env["PATH"] = f"{b}:{env['PATH']}"
+    env["SNIP_PIN_SELECTOR"] = "slurp"
     env["SNIP_NO_ELEMENTS"] = "1"
     cfg = tmp_path / ".config" / "snip-pin"
     cfg.mkdir(parents=True)
@@ -473,6 +489,7 @@ def test_autosave_dir_gets_every_capture(tmp_path):
     env = make_env(tmp_path, viewer_log)
     b, log = fake_tools(tmp_path)
     env["PATH"] = f"{b}:{env['PATH']}"
+    env["SNIP_PIN_SELECTOR"] = "slurp"
     env["SNIP_NO_ELEMENTS"] = "1"
     env["SNIP_PIN_AUTOSAVE_DIR"] = "~/Auto/$USER"
     env["USER"] = "me"
@@ -516,6 +533,7 @@ def test_save_mode_honours_filename_and_format(tmp_path):
     env = make_env(tmp_path, tmp_path / "viewer.log")
     b, log = fake_tools(tmp_path)
     env["PATH"] = f"{b}:{env['PATH']}"
+    env["SNIP_PIN_SELECTOR"] = "slurp"
     env["SNIP_NO_ELEMENTS"] = "1"
     env["SNIP_PIN_SAVE_DIR"] = str(tmp_path / "out")
     env["SNIP_PIN_FILENAME"] = "shot_%Y"
@@ -536,6 +554,7 @@ def test_sound_plays_on_copy_mode(tmp_path):
     (b / "canberra-gtk-play").write_text(f'#!/bin/sh\necho "canberra-gtk-play $*" >> "{log}"\n')
     (b / "canberra-gtk-play").chmod(0o755)
     env["PATH"] = f"{b}:{env['PATH']}"
+    env["SNIP_PIN_SELECTOR"] = "slurp"
     env["SNIP_NO_ELEMENTS"] = "1"
     env["SNIP_GEOM"] = "10x10+0+0"
     assert run(["copy"], env).returncode == 0
@@ -625,3 +644,59 @@ def test_color_subcommand_copies_the_picked_value(tmp_path):
     env["SNIP_PIN_COLOR_FORMAT"] = "bogus"
     run(["color"], env)
     assert log.read_text().count("-f hex") == 2
+
+
+def test_overlay_gets_the_input_and_its_geometry_is_captured(tmp_path):
+    viewer_log = tmp_path / "viewer.log"
+    env = make_env(tmp_path, viewer_log)
+    b, log = fake_tools(tmp_path)
+    env["PATH"] = f"{b}:{env['PATH']}"
+    env["SNIP_NO_ELEMENTS"] = "1"
+    (tmp_path / "cache" / "snip-pin").mkdir(parents=True)
+    (tmp_path / "cache" / "snip-pin" / "areas").write_text("10x10+1+1\n20x20+2+2\n")
+    env["SNIP_PIN_SEL_ADJUST"] = "1"
+    body = f'cat > "{tmp_path}/input.json"; echo "$1" > "{tmp_path}/frame.txt"; printf "300x200+50+60"'
+    env["SNIP_PIN_SELECT"] = fake_selector(tmp_path, body)
+    assert run([], env).returncode == 0
+    args = wait_for(viewer_log)
+    assert args[0].endswith("_x50_y60.png") and "grim -g 50,60 300x200" in log.read_text()
+    assert "slurp" not in log.read_text() and "hyprpicker" not in log.read_text()
+    import json
+    data = json.loads((tmp_path / "input.json").read_text())
+    assert data["monitors"][0]["name"] is None or "width" in data["monitors"][0]
+    assert [10, 20, 300, 200] in data["windows"] and data["elements"] == []
+    assert data["areas"] == ["10x10+1+1", "20x20+2+2"] and data["settings"]["adjust"] == 1
+    assert data["settings"]["border"] == "#888888ff" and data["settings"]["magnify"] == 9
+    frame = (tmp_path / "frame.txt").read_text().strip()
+    assert frame.endswith(".ppm") and "grim -s 1 -t ppm" in log.read_text()
+
+
+def test_overlay_refresh_and_fallback(tmp_path):
+    viewer_log = tmp_path / "viewer.log"
+    env = make_env(tmp_path, viewer_log)
+    b, log = fake_tools(tmp_path)
+    env["PATH"] = f"{b}:{env['PATH']}"
+    env["SNIP_NO_ELEMENTS"] = "1"
+    # first call asks for a refresh (exit 3) with a selection, the second gets it back and confirms
+    body = (f'n=$(cat "{tmp_path}/n" 2>/dev/null || echo 0); echo $((n + 1)) > "{tmp_path}/n"; '
+            f'cat > "{tmp_path}/input$n.json"; '
+            'if [ "$n" = 0 ]; then printf "100x100+5+5"; exit 3; fi; printf "100x100+5+5"')
+    env["SNIP_PIN_SELECT"] = fake_selector(tmp_path, body)
+    assert run([], env).returncode == 0
+    wait_for(viewer_log)
+    import json
+    assert json.loads((tmp_path / "input0.json").read_text())["select"] == ""
+    assert json.loads((tmp_path / "input1.json").read_text())["select"] == "100x100+5+5"
+    assert log.read_text().count("grim -s 1 -t ppm") == 2                       # a fresh frame for the retry
+    # exit 127 (no layer shell): slurp takes over
+    viewer_log.unlink()
+    env["SNIP_PIN_SELECT"] = fake_selector(tmp_path, "exit 127")
+    assert run([], env).returncode == 0
+    wait_for(viewer_log)
+    assert "slurp -b" in log.read_text()
+    # an aborted overlay (exit 1) captures nothing
+    viewer_log.unlink()
+    env["SNIP_PIN_SELECT"] = fake_selector(tmp_path, "exit 1")
+    assert run([], env).returncode == 0
+    time.sleep(0.3)
+    assert not viewer_log.exists()

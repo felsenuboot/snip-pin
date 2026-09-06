@@ -46,6 +46,7 @@
 set -u -o pipefail            # no -e: the abort paths rely on non-zero statuses
 HERE=$(dirname "$(readlink -f "$0")")
 VIEWER="${SNIP_PIN_VIEWER:-$HERE/pin-view.py}"       # override: tests
+SELECT="${SNIP_PIN_SELECT:-$HERE/snip-select.py}"    # the selection overlay; override: tests
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/snip-pin"
 STATE="${XDG_RUNTIME_DIR:-/tmp}/snip-pin"
 CONFIG="${SNIP_PIN_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/snip-pin/config}"
@@ -89,6 +90,10 @@ SEL_WIDTH=$(int_or SNIP_PIN_SEL_WIDTH 1)                  #        outline width
 SEL_MASK=$(color_or SNIP_PIN_SEL_MASK '#00000080')         #        dim over the rest of the screen
 SEL_FILL=$(color_or SNIP_PIN_SEL_FILL '#00000000')         #        fill inside the selection
 SEL_SIZE=$(int_or SNIP_PIN_SEL_SIZE 1)                    #        1 = show the size while dragging
+SEL_HINTS=$(int_or SNIP_PIN_SEL_HINTS 1)                  # overlay: key hints panel
+SEL_MAGNIFY=$(int_or SNIP_PIN_SEL_MAGNIFY 9)              # overlay: magnifier factor
+SEL_ADJUST=$(int_or SNIP_PIN_SEL_ADJUST 0)                # overlay: 1 = a drag leaves an adjustable selection, Enter confirms
+case "${SNIP_PIN_SELECTOR:-auto}" in overlay|slurp|auto) SELECTOR=${SNIP_PIN_SELECTOR:-auto} ;; *) SELECTOR=auto ;; esac
 CURSOR=$(int_or SNIP_PIN_CURSOR 0)                        # 1 = include the mouse cursor in the capture
 AREAS=$(int_or SNIP_PIN_AREAS 8)                          # how many capture areas `repeat` remembers
 FILENAME="${SNIP_PIN_FILENAME:-}"                         # strftime pattern for saved files
@@ -132,11 +137,13 @@ play_sound() {
     return 0
 }
 
-# End our own slurp (its PID is in the state file), never somebody else's.
+# End our own selection (slurp or the overlay; the PID is in the state file), never somebody else's.
 abort_selection() {
-    local pid
+    local pid cmd
     [[ -r "$STATE/slurp" ]] && read -r pid < "$STATE/slurp" || return 1
-    [[ "$pid" =~ ^[0-9]+$ && "$(cat "/proc/$pid/comm" 2>/dev/null)" == slurp ]] || return 1
+    [[ "$pid" =~ ^[0-9]+$ ]] || return 1
+    cmd=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null)
+    [[ "$(cat "/proc/$pid/comm" 2>/dev/null)" == slurp || "$cmd" == *snip-select* ]] || return 1
     kill "$pid" 2>/dev/null
 }
 
@@ -353,6 +360,11 @@ PY
         check hyprpicker optional "freezes the screen during the selection; the colour picker"
         check notify-send optional "toasts (libnotify)"
         check tesseract optional "Copy text (OCR); language packs: tesseract --list-langs"
+        if python3 -c 'import gi; gi.require_version("Gtk4LayerShell", "1.0"); from gi.repository import Gtk4LayerShell' 2>/dev/null; then
+            printf '  %-12s %s\n' "layer-shell" "gtk4-layer-shell found: the selection overlay (magnifier, anchors, key hints)"
+        else
+            printf '  %-12s MISSING  (%s)\n' "layer-shell" "gtk4-layer-shell: the selection falls back to slurp"
+        fi
         if python3 -c 'import numpy' 2>/dev/null; then printf '  %-12s %s\n' "numpy" "$(python3 -c 'import numpy; print(numpy.__version__)')"
         else printf '  %-12s MISSING  (element snapping; windows still snap)\n' "numpy"; fi
         if command -v hyprctl >/dev/null && tag=$(hyprctl version -j 2>/dev/null | jq -r '.tag // .version' 2>/dev/null) && [[ -n "$tag" ]]; then
@@ -387,6 +399,10 @@ PY
         show sel_mask '#00000080'
         show sel_fill '#00000000'
         show sel_size 1
+        show selector auto
+        show sel_hints 1
+        show sel_magnify 9
+        show sel_adjust 0
         show cursor 0
         show areas 8
         show action copy+pin
@@ -436,10 +452,10 @@ else
     # python-numpy; without it the helper fails quietly and only windows snap.
     # The detector bounds its own work (about 150 ms); the timeout is the
     # backstop so a stuck helper can never hold the frozen screen.
-    elems='' pid_detect='' pid_freeze='' lua_cfg=''
+    elems='' frame='' pid_detect='' pid_freeze='' lua_cfg=''
     cleanup() {
         [[ -n "$pid_freeze" ]] && kill "$pid_freeze" 2>/dev/null
-        rm -f "$elems" "$STATE/selecting" "$STATE/abort" "$STATE/slurp"
+        rm -f "$elems" "$frame" "$STATE/selecting" "$STATE/abort" "$STATE/slurp"
         if [[ -n "$lua_cfg" ]]; then
             hyprctl eval 'hl.unbind("mouse:274")' >/dev/null 2>&1
         else
@@ -448,9 +464,13 @@ else
     }
     trap cleanup EXIT
     elems=$(mktemp)
+    frame=$(mktemp --suffix=.ppm)
     if [[ -z "$SNIP_NO_ELEMENTS" ]]; then
-        (grim -s 1 -t ppm - | timeout 0.6 "$HERE/snip-elements.py" > "$elems") 2>/dev/null &
+        # one grab serves both: the detector reads it from the pipe, the overlay from the file
+        (grim -s 1 -t ppm - | tee "$frame" | timeout 0.6 "$HERE/snip-elements.py" > "$elems") 2>/dev/null &
         pid_detect=$!
+    else
+        rm -f "$frame"                                        # the overlay grabs its own frame if it runs
     fi
 
     # Windows on every monitor's visible workspace (plus an open special
@@ -466,30 +486,69 @@ else
     # ends our slurp by PID (not every slurp on the system).
     # Hyprland with a Lua config rejects `keyword`; it takes `eval` instead.
     abort_cmd="$HERE/snip-pin.sh abort"
-    if hyprctl keyword bind ", mouse:274, exec, $abort_cmd" 2>&1 | grep -q non-legacy; then
-        lua_cfg=1
-        hyprctl eval "hl.bind(\"mouse:274\", hl.dsp.exec_cmd(\"$abort_cmd\"))" >/dev/null 2>&1
-    fi
+    bind_right_click() {                                     # only slurp needs it; the overlay handles right-click itself
+        if hyprctl keyword bind ", mouse:274, exec, $abort_cmd" 2>&1 | grep -q non-legacy; then
+            lua_cfg=1
+            hyprctl eval "hl.bind(\"mouse:274\", hl.dsp.exec_cmd(\"$abort_cmd\"))" >/dev/null 2>&1
+        fi
+    }
 
-    if command -v hyprpicker >/dev/null; then
-        hyprpicker -r -z &
-        pid_freeze=$!
-        sleep 0.1
+    geom='' rc=1
+    if [[ "$SELECTOR" != slurp ]]; then
+        # The overlay draws the frozen frame itself, so no hyprpicker; it takes
+        # the window and element rectangles, the remembered areas and the look
+        # as JSON and prints the geometry. Exit 127 (no gtk4-layer-shell) falls
+        # back to slurp, exit 3 (F5) asks for a fresh frame and starts again.
+        [[ -n "$pid_detect" ]] && wait "$pid_detect"
+        [[ -e "$STATE/abort" ]] && { log "aborted by a second tap"; exit 0; }
+        select_geom=''
+        for _try in 1 2 3 4 5; do
+            [[ -s "$frame" ]] || grim -s 1 -t ppm "$frame"
+            input=$(jq -n -c --argjson mon "$(hyprctl monitors -j)" --arg rects "$rects" --rawfile elems "$elems" \
+                    --rawfile areas <(cat "$CACHE/areas" 2>/dev/null; true) --arg select "$select_geom" \
+                    --arg border "$SEL_BORDER" --argjson width "$SEL_WIDTH" --arg mask "$SEL_MASK" --arg fill "$SEL_FILL" \
+                    --argjson size "$SEL_SIZE" --argjson hints "$SEL_HINTS" --argjson magnify "$SEL_MAGNIFY" --argjson adjust "$SEL_ADJUST" '
+                def boxes: [splits("\n") | select(length > 0) | capture("(?<x>-?[0-9]+),(?<y>-?[0-9]+) (?<w>[0-9]+)x(?<h>[0-9]+)")
+                            | [.x, .y, .w, .h] | map(tonumber)];
+                {monitors: [$mon[] | {name, x, y, width, height, scale, transform}],
+                 windows: ($rects | boxes), elements: ($elems | boxes),
+                 areas: [$areas | splits("\n") | select(length > 0)], select: $select,
+                 settings: {border: $border, width: $width, mask: $mask, fill: $fill, size: $size,
+                            hints: $hints, magnify: $magnify, adjust: $adjust}}')
+            geom_file=$(mktemp)
+            "$SELECT" "$frame" <<< "$input" > "$geom_file" 2>/dev/null &
+            echo $! > "$STATE/slurp"
+            wait $!
+            rc=$?
+            geom=$(<"$geom_file"); rm -f "$geom_file"
+            log "overlay rc=$rc geom=$geom"
+            if [[ $rc -eq 3 ]]; then select_geom=$geom; geom=''; rm -f "$frame"; log "refresh requested"; continue; fi
+            break
+        done
+        [[ $rc -eq 127 ]] && log "no gtk4-layer-shell: falling back to slurp"
     fi
-    [[ -n "$pid_detect" ]] && wait "$pid_detect"
-    [[ -e "$STATE/abort" ]] && exit 0            # second tap arrived meanwhile
-    # slurp highlights the smallest rectangle under the pointer, so elements
-    # inside a window win over the window itself. It runs in the background so
-    # its PID can be recorded for `abort`.
-    geom_file=$(mktemp)
-    slurp_opts=(-b "$SEL_MASK" -c "$SEL_BORDER" -s "$SEL_FILL" -w "$SEL_WIDTH")
-    [[ "$SEL_SIZE" -ne 0 ]] && slurp_opts+=(-d)
-    printf '%s\n' "$rects" | cat - "$elems" | slurp "${slurp_opts[@]}" -f "%wx%h+%x+%y" > "$geom_file" &
-    echo $! > "$STATE/slurp"
-    wait $!
-    rc=$?
-    geom=$(<"$geom_file")
-    rm -f "$geom_file"
+    if [[ "$SELECTOR" == slurp || $rc -eq 127 ]]; then
+        bind_right_click
+        if command -v hyprpicker >/dev/null; then
+            hyprpicker -r -z &
+            pid_freeze=$!
+            sleep 0.1
+        fi
+        [[ -n "$pid_detect" ]] && wait "$pid_detect"
+        [[ -e "$STATE/abort" ]] && exit 0            # second tap arrived meanwhile
+        # slurp highlights the smallest rectangle under the pointer, so elements
+        # inside a window win over the window itself. It runs in the background so
+        # its PID can be recorded for `abort`.
+        geom_file=$(mktemp)
+        slurp_opts=(-b "$SEL_MASK" -c "$SEL_BORDER" -s "$SEL_FILL" -w "$SEL_WIDTH")
+        [[ "$SEL_SIZE" -ne 0 ]] && slurp_opts+=(-d)
+        printf '%s\n' "$rects" | cat - "$elems" | slurp "${slurp_opts[@]}" -f "%wx%h+%x+%y" > "$geom_file" &
+        echo $! > "$STATE/slurp"
+        wait $!
+        rc=$?
+        geom=$(<"$geom_file")
+        rm -f "$geom_file"
+    fi
     cleanup
     trap - EXIT
     [[ $rc -ne 0 || -z "$geom" ]] && exit 0
