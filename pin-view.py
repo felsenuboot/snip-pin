@@ -58,6 +58,64 @@ else:
     SOCKET = os.path.join(RUNTIME_DIR, "snip-pin.sock")
 HANDOVER_TIMEOUT = 1.5      # a live server answers in milliseconds; longer means it is stuck
 
+# ---- logging -------------------------------------------------------------------
+# debug = 1 (SNIP_PIN_DEBUG=1) appends timestamped lines to
+# $XDG_STATE_HOME/snip-pin/log: the viewer is one long-lived process started
+# from a bind, so stderr goes nowhere and a problem on the tenth pin leaves
+# no trace otherwise. warn() always goes to stderr and to the log when on.
+LOG_MAX = 1_000_000
+
+
+def log_path():
+    return os.path.join(os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state"), "snip-pin", "log")
+
+
+def debug_enabled():
+    v = os.environ.get("SNIP_PIN_DEBUG", "")
+    if v:
+        return v.strip().lower() not in ("0", "no", "false", "off")
+    cfg = globals().get("CFG")
+    return cfg is not None and cfg.get("debug", "0").strip().lower() not in ("0", "no", "false", "off", "")
+
+
+def rotate_log(path, limit=LOG_MAX):
+    """Keep one previous log when the current one grows past the limit."""
+    try:
+        if os.path.getsize(path) > limit:
+            os.replace(path, path + ".1")
+    except OSError:
+        pass
+
+
+def log(msg):
+    if not debug_enabled():
+        return
+    path = log_path()
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        rotate_log(path)
+        with open(path, "a", encoding="utf-8") as f:
+            stamp = f"{time.strftime('%Y-%m-%d %H:%M:%S')}.{int(time.time() * 1000) % 1000:03d}"
+            f.write(f"{stamp} view[{os.getpid()}] {msg}\n")
+    except OSError:
+        pass
+
+
+def warn(msg):
+    print(f"pin-view: {msg}", file=sys.stderr)
+    log("WARN " + msg)
+
+
+def _excepthook(exc_type, exc, tb):
+    import traceback
+    text = "".join(traceback.format_exception(exc_type, exc, tb))
+    sys.stderr.write(text)
+    if debug_enabled():
+        log("EXCEPTION " + text.strip().replace("\n", "\n    "))
+
+
+sys.excepthook = _excepthook
+
 
 def hand_over(args):
     """Send [path, x, y] to a running viewer; True if it took the pin."""
@@ -133,7 +191,9 @@ if __name__ == "__main__" and len(sys.argv) >= 2:
         if hand_over(sys.argv[1:2]) or sys.argv[1] != "--reopen":
             sys.exit(0)                        # no viewer: no pins to act on; only --reopen starts one
     elif hand_over([os.path.abspath(sys.argv[1])] + sys.argv[2:]):
+        log(f"handed over {sys.argv[1:]}")
         sys.exit(0)
+    log(f"starting viewer for {sys.argv[1:]}")
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 import cairo
@@ -275,7 +335,7 @@ def default_tool():
         return name
     if name not in _warned:
         _warned.add(name)
-        print(f"pin-view: config default_tool = {name}: unknown tool", file=sys.stderr)
+        warn(f"config default_tool = {name}: unknown tool")
     return None
 
 
@@ -545,12 +605,12 @@ def build_keymap(overrides):
             for one in (overrides[action] if pass_overrides else default).split():
                 b = parse_binding(one)
                 if b is None:
-                    print(f"pin-view: config [keys] {action} = {one}: unknown key", file=sys.stderr)
+                    warn(f"config [keys] {action} = {one}: unknown key")
                     continue
                 keymap[b] = action
     for action in overrides:
         if action not in ACTIONS:
-            print(f"pin-view: config [keys] {action}: unknown action", file=sys.stderr)
+            warn(f"config [keys] {action}: unknown action")
     return keymap
 
 
@@ -560,7 +620,7 @@ def build_mouse(overrides):
         if button in mouse and action in MOUSE_ACTIONS:
             mouse[button] = action
         else:
-            print(f"pin-view: config [mouse] {button} = {action}: unknown button or action", file=sys.stderr)
+            warn(f"config [mouse] {button} = {action}: unknown button or action")
     return mouse
 
 
@@ -591,6 +651,7 @@ def apply_config(force=False):
     global KEYMAP, MOUSE, _css
     if not CFG.reload() and not force:
         return
+    log(f"config {CFG.path} loaded: {sorted(CFG.data[''])}")
     KEYMAP = build_keymap(CFG.section("keys"))
     MOUSE = build_mouse(CFG.section("mouse"))
     COLORS[:] = load_palette(CFG.get("palette", ""))
@@ -655,7 +716,7 @@ def play_sound():
             media.connect("notify::ended", lambda m, p: _media.remove(m) if m in _media else None)
             media.play()
     except (OSError, GLib.Error) as e:
-        print(f"pin-view: sound: {e}", file=sys.stderr)
+        warn(f"sound: {e}")
 
 
 def scroll_steps(wheel, dy, acc):
@@ -722,9 +783,11 @@ def move_window(address, x, y):
              "classic": f"dispatch movewindowpixel exact {x} {y},address:{address}"}
     order = [_move_syntax] if _move_syntax else ["lua", "classic"]
     for name in order:
-        if hypr(forms[name]).strip() == "ok":
+        reply = hypr(forms[name]).strip()
+        if reply == "ok":
             _move_syntax = name
             return True
+        log(f"move {address} -> {x},{y} ({name}): {reply!r}")
     return False
 
 
@@ -1668,7 +1731,7 @@ class Pin(Gtk.ApplicationWindow):
                 json.dump(state, f)
             prune_closed(reopen_limit())
         except (OSError, GLib.Error) as e:
-            print(f"pin-view: cannot record the closed pin: {e}", file=sys.stderr)
+            warn(f"cannot record the closed pin: {e}")
 
     def destroy_pin(self):
         self.destroying = True
@@ -2468,13 +2531,14 @@ class Pin(Gtk.ApplicationWindow):
             clipboard_owner(self.get_application()).offer(path, copy_as_file())
         except (GLib.Error, OSError) as e:
             # no display clipboard (odd session) or an unreadable export: fall back to wl-copy, PNG only
-            print(f"pin-view: clipboard: {e}; using wl-copy", file=sys.stderr)
+            warn(f"clipboard: {e}; using wl-copy")
             with open(path, "rb") as f:
                 subprocess.run(["wl-copy", "--type", "image/png"], stdin=f)
         finally:
             if temporary:
                 os.unlink(path)
         notify("Copied to clipboard")
+        log(f"copied {self.path} ({len(self.ops)} ops)")
         play_sound()
         self.close()
 
@@ -2497,9 +2561,10 @@ class Pin(Gtk.ApplicationWindow):
             # unwritable folder, full disk, missing encoder: keep the pin so nothing is lost
             msg = getattr(e, "strerror", None) or getattr(e, "message", None) or str(e)
             notify(f"Cannot save to {folder}: {msg}", 3000)
-            print(f"pin-view: cannot save to {folder}: {e}", file=sys.stderr)
+            warn(f"cannot save to {folder}: {e}")
             return
         notify(f"Saved {dest}")
+        log(f"saved {dest}")
         play_sound()
         self.close()
 
@@ -2728,7 +2793,7 @@ def reopen_pin(app):
         try:
             win = Pin(app, png, pos, out_scale=1.0 / float(state.get("base_scale") or 1.0), state=state)
         except (GLib.Error, ValueError, ZeroDivisionError) as e:
-            print(f"pin-view: cannot reopen {png}: {e}", file=sys.stderr)
+            warn(f"cannot reopen {png}: {e}")
             continue
         win.path = state.get("path", png)          # the original file, for exports without annotations
         try:
@@ -2766,12 +2831,13 @@ def open_pin(app, args):
     except GLib.Error as e:
         # deleted between 'last' and here, a truncated clipboard image, 'pin FILE' on a non-image
         notify(f"Cannot open {os.path.basename(path)}", 3000)
-        print(f"pin-view: cannot open {path}: {e.message.splitlines()[0]}", file=sys.stderr)
+        warn(f"cannot open {path}: {e.message.splitlines()[0]}")
         if not app.get_windows():
             app.quit()             # nothing to show: a window-less GtkApplication would idle forever
         return False
     win.present()
     win.place()
+    log(f"pin {path} at {pos} scale {win.scale:.3f} ({win.iw}x{win.ih})")
     return True
 
 
@@ -2828,6 +2894,7 @@ def serve(app):
             # acknowledge first: the client must not wait for GTK, and must
             # not start its own viewer when the file turns out to be bad
             conn.sendall(b"1")
+            log(f"request {args}")
             if args and args[0] in COMMANDS:
                 run_command(app, args[0])
             elif args:

@@ -207,6 +207,7 @@ opened from the picker appear centred.
 | `snip-pin.sh clickthrough` | make every pin click-through, or solid again if any is click-through |
 | `snip-pin.sh clear` | delete every snip that is not kept |
 | `snip-pin.sh doctor` | check the dependencies and print versions |
+| `snip-pin.sh log` | show the debug log (`debug = 1` in the config); `log -f` follows it |
 
 Pressing the snip key twice quickly also opens the history: the second press
 aborts the selection the first one started. In the picker, click or use the
@@ -257,6 +258,7 @@ effective settings and where each comes from.
 | `alpha_bg` | `transparent` | behind transparent images (clipboard, files): `transparent`, `checker`, or a colour like `#ffffff` |
 | `thumb_size` | `75` | side of the tile a pin collapses into |
 | `reopen` | `5` | how many closed pins `reopen` can bring back; `0` turns it off |
+| `debug` | `0` | `1` logs what the script and the viewer do to `~/.local/state/snip-pin/log` (rotated at 1 MB) |
 | `confirm_close_all` | `1` | `close-all` asks before closing more than one pin; `0` closes at once |
 | `action` | `copy+pin` | what a bare `snip-pin.sh` (and `screen`, `repeat`) does with the capture: `copy`, `save`, `pin`, joined by `+` |
 

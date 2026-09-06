@@ -581,3 +581,21 @@ def make_png_file(path):
     with open(path, "wb") as f:
         f.write(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 4, 4, 8, 2, 0, 0, 0))
                 + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+
+
+def test_debug_log_and_log_subcommand(tmp_path):
+    env = make_env(tmp_path, tmp_path / "viewer.log")
+    b, log = fake_tools(tmp_path)
+    env["PATH"] = f"{b}:{env['PATH']}"
+    env["XDG_STATE_HOME"] = str(tmp_path / "state")
+    env["SNIP_GEOM"] = "10x10+0+0"
+    r = run(["log"], env)
+    assert r.returncode == 0 and "no log" in r.stdout
+    assert run([], env).returncode == 0
+    assert not (tmp_path / "state" / "snip-pin" / "log").exists()          # off by default
+    env["SNIP_PIN_DEBUG"] = "1"
+    assert run([], env).returncode == 0
+    text = (tmp_path / "state" / "snip-pin" / "log").read_text()
+    assert "sh[" in text and "geometry 10x10+0+0" in text and "captured" in text
+    r = run(["log"], env)
+    assert r.returncode == 0 and "captured" in r.stdout

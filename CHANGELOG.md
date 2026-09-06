@@ -34,6 +34,7 @@ layout) may still change.
 - Eraser tool (`X`): click an annotation to remove it. With no tool active a click selects an annotation, a drag moves it, `Delete` removes it, a swatch or width restyles it; every step is undoable and numbered steps renumber (#80).
 - `snip-pin.sh clipboard` with text in the clipboard renders it into an image (Pango, `text_font`, `text_width`, `text_margin`, `text_fg`, `text_bg`) and pins that; a copied path to an image file pins the file (#71).
 - `Ctrl+Shift+C` copies the text in a pin, recognised by tesseract (`ocr_lang`, or any engine via `ocr_cmd`); with a crop marquee drawn only that part is read. Small captures are upscaled first; the result is toasted and the pin stays (#84).
+- `debug = 1` logs subcommands, geometry, captures, hand-overs, placement replies, copies, saves, warnings and uncaught exceptions with timestamps to `~/.local/state/snip-pin/log` (rotated at 1 MB); `snip-pin.sh log [-f]` shows it and `doctor` names it (#89).
 
 ## [0.3.0] – 2026-09-06
 
