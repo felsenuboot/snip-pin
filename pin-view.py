@@ -237,7 +237,7 @@ ACTIONS = {
     "copy": "ctrl+c", "save": "ctrl+s", "close": "", "cancel": "Escape", "confirm": "Return KP_Enter",
     "undo": "ctrl+z", "redo": "ctrl+shift+z ctrl+y",
     "reset": "ctrl+0", "reset_zoom": "", "reset_opacity": "ctrl+1", "click_through": "ctrl+t",
-    "rotate_cw": "ctrl+r", "rotate_ccw": "ctrl+shift+r", "flip_h": "ctrl+h", "flip_v": "ctrl+j",
+    "rotate_cw": "ctrl+r", "rotate_ccw": "ctrl+shift+r", "flip_h": "ctrl+h", "flip_v": "ctrl+j", "smooth": "",
     "width_down": "bracketleft", "width_up": "bracketright", "menu": "F10",
 }
 ACTIONS.update({f"tool_{tool}": key.lower() for tool, key, _, _ in TOOLS})
@@ -471,6 +471,17 @@ def clamp_to_monitor(monitor, x, y, w, h):
     x = max(mx, min(x, mx + mw - w)) if w <= mw else mx
     y = max(my, min(y, my + mh - h)) if h <= mh else my
     return int(round(x)), int(round(y))
+
+
+def zoom_shift(pointer, img_pt, new_scale):
+    """How far the window must move so that img_pt (image coordinates) stays
+    under the pointer (widget coordinates) after the image is drawn at new_scale."""
+    return (round(pointer[0] - img_pt[0] * new_scale), round(pointer[1] - img_pt[1] * new_scale))
+
+
+def pick_filter(smooth, scale, base_scale):
+    """Bilinear as a rule; nearest neighbour when smoothing is off and the pin is zoomed in."""
+    return cairo.FILTER_GOOD if smooth or scale <= base_scale * 1.001 else cairo.FILTER_NEAREST
 
 
 def unique_path(folder, stem, ext):
@@ -734,6 +745,9 @@ class Pin(Gtk.ApplicationWindow):
         self.toolbar_shown = False    # tracked ourselves: get_visible() is true during the fade-out
         self.hide_timer = None
         self.scroll_acc = 0.0         # smooth-scroll distance not yet turned into a step
+        self.pointer = None           # last pointer position over the pin (widget coordinates)
+        self.smooth = CFG.get("smooth", "1").strip() not in ("0", "no", "false")
+        self.zoom_at_pointer = CFG.get("zoom_at_pointer", "1").strip() not in ("0", "no", "false")
         self.osd = None               # (text, timer id): zoom / opacity readout drawn on the pin
 
         self.set_decorated(False)
@@ -777,6 +791,7 @@ class Pin(Gtk.ApplicationWindow):
         hover = Gtk.EventControllerMotion()
         hover.connect("enter", lambda c, x, y: self.on_hover(True))
         hover.connect("leave", lambda c: self.on_hover(False))
+        hover.connect("motion", lambda c, x, y: setattr(self, "pointer", (x, y)))
         self.area.add_controller(hover)
 
         keys = Gtk.EventControllerKey()
@@ -804,6 +819,9 @@ class Pin(Gtk.ApplicationWindow):
             act = Gio.SimpleAction.new(name, None)
             act.connect("activate", lambda *a, name=name: self.run_action(name))
             self.add_action(act)
+        self.smooth_action = Gio.SimpleAction.new_stateful("smooth", None, GLib.Variant.new_boolean(self.smooth))
+        self.smooth_action.connect("activate", lambda a, p: self.set_smooth(not self.smooth))
+        self.add_action(self.smooth_action)
 
     # ---- geometry -------------------------------------------------------
     def apply_scale(self):
@@ -864,7 +882,7 @@ class Pin(Gtk.ApplicationWindow):
             self.apply_input_region()
         cr.scale(w / self.iw, h / self.ih)
         Gdk.cairo_set_source_pixbuf(cr, self.pixbuf, 0, 0)
-        cr.get_source().set_filter(cairo.FILTER_GOOD)
+        cr.get_source().set_filter(pick_filter(self.smooth, self.scale, self.base_scale))
         cr.paint()
         for op in self.ops:
             draw_op(cr, self.pixbuf, op)
@@ -1384,6 +1402,8 @@ class Pin(Gtk.ApplicationWindow):
             self.transform("rotate", 3)
         elif action in ("flip_h", "flip_v"):
             self.transform("flip", action[-1])
+        elif action == "smooth":
+            self.set_smooth(not self.smooth)
         elif action == "reset_opacity":
             self.opacity = 1.0; self.set_opacity(1.0); self.show_osd("100 %")
         elif action == "click_through":
@@ -1428,9 +1448,28 @@ class Pin(Gtk.ApplicationWindow):
             self.set_opacity(self.opacity)
             self.show_osd(f"{round(self.opacity * 100)} %")
         else:
-            self.set_scale(self.scale / ZOOM_STEP ** steps)
-            self.show_osd(f"{round(self.scale / self.base_scale * 100)} %")
+            self.zoom(self.scale / ZOOM_STEP ** steps)
         return True
+
+    def zoom(self, new_scale):
+        """Zoom, keeping the image point under the pointer where it is (zoom_at_pointer = 1):
+        the window moves by the difference, which on Hyprland means a move request
+        held through the resize like a crop's."""
+        new_scale = max(self.min_scale(), min(new_scale, MAX_SCALE))
+        c = self.client() if self.zoom_at_pointer and self.pointer is not None and self.address else None
+        if c is not None:
+            img_pt = self.to_img(*self.pointer)
+            dx, dy = zoom_shift(self.pointer, img_pt, new_scale)
+            self.pointer = (img_pt[0] * new_scale, img_pt[1] * new_scale)
+        self.set_scale(new_scale)
+        if c is not None:
+            self.move_to(c["at"][0] + dx, c["at"][1] + dy)
+        self.show_osd(f"{round(self.scale / self.base_scale * 100)} %")
+
+    def set_smooth(self, on):
+        self.smooth = on
+        self.smooth_action.set_state(GLib.Variant.new_boolean(on))
+        self.area.queue_draw()
 
     def on_key(self, ctrl, keyval, keycode, state):
         mods = int(state) & MOD_MASK
@@ -1475,6 +1514,7 @@ class Pin(Gtk.ApplicationWindow):
         tr.append(f"Flip vertically\t{key_label('flip_v')}", "win.flip_v")
         m.append_section(None, tr)
         tail = Gio.Menu()
+        tail.append("Smooth scaling", "win.smooth")
         tail.append(f"Reset image\t{key_label('reset')}", "win.reset")
         tail.append(f"Click-through\t{key_label('click_through')}", "win.click_through")
         tail.append(f"Close\t{key_label('cancel')}", "win.close")

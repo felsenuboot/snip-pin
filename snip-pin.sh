@@ -306,6 +306,8 @@ PY
         show autosave_dir ''
         show default_tool none
         show confirm_close_all 1
+        show zoom_at_pointer 1
+        show smooth 1
         exit 0 ;;
     --version|-V)
         cat "$HERE/VERSION"; exit 0 ;;

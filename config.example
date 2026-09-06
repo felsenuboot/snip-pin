@@ -22,6 +22,8 @@ areas = 8                     # capture areas remembered for `snip-pin.sh repeat
 action = copy+pin             # what a bare `snip-pin.sh` does after the capture: copy, save, pin, joined by +
 default_tool = none           # tool active on a new pin: none, rect, ellipse, arrow, pen, text, counter, marker, blur
 confirm_close_all = 1         # `snip-pin.sh close-all` asks before closing several pins; 0 closes at once
+zoom_at_pointer = 1           # the wheel zooms around the pointer (the pin moves); 0 keeps the top-left corner
+smooth = 1                    # bilinear scaling; 0 draws crisp pixel blocks when zoomed in (menu: Smooth scaling)
 
 [keys]
 # action = binding [binding ...]; modifiers ctrl, shift, alt, super; an empty
@@ -41,6 +43,7 @@ confirm_close_all = 1         # `snip-pin.sh close-all` asks before closing seve
 #rotate_ccw = ctrl+shift+r
 #flip_h = ctrl+h
 #flip_v = ctrl+j
+#smooth =                     # toggle smooth scaling
 #click_through = ctrl+t       # the pin ignores the mouse until `snip-pin.sh clickthrough` (a bind) undoes it
 #width_down = bracketleft
 #width_up = bracketright

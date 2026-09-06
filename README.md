@@ -136,7 +136,7 @@ accepted.
 | Action | Input |
 |---|---|
 | Move | drag with the left mouse button |
-| Zoom | mouse wheel or touchpad (10 % steps, the percentage shows briefly) |
+| Zoom | mouse wheel or touchpad (10 % steps, around the pointer, the percentage shows briefly) |
 | Opacity | `Ctrl` + wheel, `Ctrl+1` resets |
 | Rotate, flip | `Ctrl+R` / `Ctrl+Shift+R` a quarter turn, `Ctrl+H` / `Ctrl+J` flip; annotations turn with the image, undoable |
 | Reset image | `Ctrl+0`: zoom, opacity, rotation and flips back to normal |
@@ -223,6 +223,8 @@ effective settings and where each comes from.
 | `cursor` | `0` | `1` includes the mouse cursor in the capture |
 | `areas` | `8` | capture areas remembered for `repeat` |
 | `default_tool` | `none` | tool active as soon as a pin opens: `rect`, `ellipse`, `arrow`, `pen`, `text`, `counter`, `marker`, `blur` |
+| `zoom_at_pointer` | `1` | the wheel zooms around the pointer, so the pin moves; `0` zooms from the top-left corner |
+| `smooth` | `1` | bilinear scaling; `0` shows crisp pixel blocks when zoomed in (also a menu toggle) |
 | `confirm_close_all` | `1` | `close-all` asks before closing more than one pin; `0` closes at once |
 | `action` | `copy+pin` | what a bare `snip-pin.sh` (and `screen`, `repeat`) does with the capture: `copy`, `save`, `pin`, joined by `+` |
 
