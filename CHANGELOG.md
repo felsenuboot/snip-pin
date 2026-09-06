@@ -37,6 +37,7 @@ layout) may still change.
 - `debug = 1` logs subcommands, geometry, captures, hand-overs, placement replies, copies, saves, warnings and uncaught exceptions with timestamps to `~/.local/state/snip-pin/log` (rotated at 1 MB); `snip-pin.sh log [-f]` shows it and `doctor` names it (#89).
 - Pin groups: `snip-pin.sh group next|prev|N` shows another group of pins and hides the current one; new pins join the current group, *Move to group* in the menu moves a pin, `toggle` acts on the current group (#70).
 - Translations: the viewer's and the picker's strings go through gettext; a German translation ships in `po/de.po` and `install.sh` compiles it into `~/.local/share/locale` (#90).
+- `snip-pin.sh color` picks a pixel colour with hyprpicker's zoom lens and copies it (`color_format`: hex, rgb, hsl, hsv, cmyk); the first step of #92.
 
 ## [0.3.0] – 2026-09-06
 

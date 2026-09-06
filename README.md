@@ -201,6 +201,7 @@ opened from the picker appear centred.
 | `snip-pin.sh history` | open a thumbnail grid of all cached snips, newest first |
 | `snip-pin.sh clipboard` | pin the image in the clipboard (PNG, JPEG, WebP, … or a copied image file), centred on the screen; copied text is rendered as an image and pinned (`text_font`, `text_width`, colours in the config) |
 | `snip-pin.sh screen` | capture the monitor under the pointer without a selection and pin it; `screen all` captures every monitor as one image |
+| `snip-pin.sh color` | pick a pixel colour with hyprpicker's zoom lens; the value is copied and shown (`color_format`: hex, rgb, hsl, hsv, cmyk) |
 | `snip-pin.sh repeat` | capture the area of the last snip again (a progress bar, a chat window); `repeat 3` the third-last area |
 | `snip-pin.sh reopen` | bring the last closed pin back as it was (the last `reopen` = 5 closed pins are kept for the session) |
 | `snip-pin.sh group next` | show the next group of pins instead of the current one (`prev`, or a number); every pin belongs to a group, new pins join the current one, *Move to group* in a pin's menu moves it |
@@ -260,6 +261,7 @@ effective settings and where each comes from.
 | `alpha_bg` | `transparent` | behind transparent images (clipboard, files): `transparent`, `checker`, or a colour like `#ffffff` |
 | `thumb_size` | `75` | side of the tile a pin collapses into |
 | `reopen` | `5` | how many closed pins `reopen` can bring back; `0` turns it off |
+| `color_format` | `hex` | output of `snip-pin.sh color`: `hex`, `rgb`, `hsl`, `hsv` or `cmyk` |
 | `debug` | `0` | `1` logs what the script and the viewer do to `~/.local/state/snip-pin/log` (rotated at 1 MB) |
 | `confirm_close_all` | `1` | `close-all` asks before closing more than one pin; `0` closes at once |
 | `action` | `copy+pin` | what a bare `snip-pin.sh` (and `screen`, `repeat`) does with the capture: `copy`, `save`, `pin`, joined by `+` |
