@@ -4,7 +4,8 @@
 usage: pin-view.py IMAGE [X Y]
 
   drag           move            wheel             zoom (10% steps)
-  Ctrl+wheel     opacity         Ctrl+0 / 1        reset zoom / opacity
+  Ctrl+wheel     opacity         Ctrl+0            reset (zoom, opacity, rotation)
+  Ctrl+R / Ctrl+Shift+R  rotate   Ctrl+H / Ctrl+J   flip   Ctrl+1  reset opacity
   Ctrl+C         copy image & close        Ctrl+S    save to screenshot folder & close
   dbl-click      copy image & close        Esc       close without copying
   right-click    copy image & close        middle-click  menu
@@ -235,14 +236,15 @@ window.snip-pin.ghost {{ border-style: dashed; }}          /* click-through: the
 ACTIONS = {
     "copy": "ctrl+c", "save": "ctrl+s", "close": "", "cancel": "Escape", "confirm": "Return KP_Enter",
     "undo": "ctrl+z", "redo": "ctrl+shift+z ctrl+y",
-    "reset_zoom": "ctrl+0", "reset_opacity": "ctrl+1", "click_through": "ctrl+t",
+    "reset": "ctrl+0", "reset_zoom": "", "reset_opacity": "ctrl+1", "click_through": "ctrl+t",
+    "rotate_cw": "ctrl+r", "rotate_ccw": "ctrl+shift+r", "flip_h": "ctrl+h", "flip_v": "ctrl+j",
     "width_down": "bracketleft", "width_up": "bracketright", "menu": "F10",
 }
 ACTIONS.update({f"tool_{tool}": key.lower() for tool, key, _, _ in TOOLS})
 ACTIONS.update({f"color_{i + 1}": str(i + 1) for i in range(len(COLORS))})
 # what the mouse does; [mouse] in the config file overrides ("right = menu")
 MOUSE_DEFAULTS = {"right": "copy", "double": "copy", "middle": "menu"}
-MOUSE_ACTIONS = ("copy", "save", "close", "menu", "reset_zoom", "none")
+MOUSE_ACTIONS = ("copy", "save", "close", "menu", "reset", "reset_zoom", "none")
 MOD_NAMES = {"ctrl": "CONTROL_MASK", "control": "CONTROL_MASK", "shift": "SHIFT_MASK",
              "alt": "ALT_MASK", "super": "SUPER_MASK", "win": "SUPER_MASK", "meta": "META_MASK"}
 KEY_ALIASES = {"esc": "Escape", "enter": "Return", "del": "Delete", "[": "bracketleft", "]": "bracketright",
@@ -501,10 +503,38 @@ def norm_rect(pts):
     (x0, y0), (x1, y1) = pts[0], pts[-1]
     return min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)
 
+MARKERS = ("crop", "rotate", "flip")               # undo markers, not drawings
+
+
+def transform_point(kind, arg, iw, ih):
+    """A function (x, y) -> (x', y') for rotating an iw x ih image by `arg` quarter
+    turns clockwise (kind "rotate") or flipping it (kind "flip", arg "h" or "v")."""
+    if kind == "flip":
+        return (lambda x, y: (iw - x, y)) if arg == "h" else (lambda x, y: (x, ih - y))
+    turns = arg % 4
+    if turns == 1:
+        return lambda x, y: (ih - y, x)
+    if turns == 2:
+        return lambda x, y: (iw - x, ih - y)
+    if turns == 3:
+        return lambda x, y: (y, iw - x)
+    return lambda x, y: (x, y)
+
+
+def transform_ops(ops, kind, arg, iw, ih):
+    """Rotate or flip every annotation with the image (in place); text keeps its orientation."""
+    f = transform_point(kind, arg, iw, ih)
+    for op in ops:
+        if op["kind"] in MARKERS:
+            continue
+        op["pts"] = [f(x, y) for x, y in op["pts"]]
+        op.pop("_mosaic", None)
+
+
 def shift_ops(ops, dx, dy):
     """Move every annotation by (dx, dy) in image coordinates (after a crop)."""
     for op in ops:
-        if op["kind"] == "crop":
+        if op["kind"] in MARKERS:
             continue
         op["pts"] = [(x + dx, y + dy) for x, y in op["pts"]]
         op.pop("_mosaic", None)                    # the cached mosaic was cut from the old pixbuf
@@ -540,7 +570,7 @@ def mosaic_pixbuf(pixbuf, op):
 
 def draw_op(cr, pixbuf, op, caret=False):
     k, pts, w = op["kind"], op["pts"], op["width"]
-    if k == "crop":
+    if k in MARKERS:
         return                                     # an undo marker, not a drawing
     r, g, b = op["color"]
     cr.save()
@@ -694,6 +724,8 @@ class Pin(Gtk.ApplicationWindow):
         self.pending = None           # op being dragged out
         self.typing = None            # text op being typed
         self.crop_pending = None      # (x0, y0, w, h) waiting for Enter
+        self.turns = 0                # net quarter turns clockwise, flips: for "reset"
+        self.flipped = {"h": False, "v": False}
         self.address = None           # Hyprland window address once known (placement, crop)
         self._syncing = False
         self.hovered = False
@@ -767,7 +799,8 @@ class Pin(Gtk.ApplicationWindow):
         self.menu = Gtk.PopoverMenu.new_from_model(self.build_menu())
         self.menu.set_parent(self.area)
         self.menu.set_has_arrow(False)
-        for name in ("copy", "save", "reset_zoom", "close", "undo", "redo", "click_through"):
+        for name in ("copy", "save", "reset", "close", "undo", "redo", "click_through",
+                     "rotate_cw", "rotate_ccw", "flip_h", "flip_v"):
             act = Gio.SimpleAction.new(name, None)
             act.connect("activate", lambda *a, name=name: self.run_action(name))
             self.add_action(act)
@@ -1004,6 +1037,10 @@ class Pin(Gtk.ApplicationWindow):
             op = self.ops.pop()
             if op["kind"] == "crop":
                 self.set_pixbuf(op["pixbuf"], -op["dx"], -op["dy"])
+            elif op["kind"] == "rotate":
+                self.transform("rotate", 4 - op["arg"], record=False)
+            elif op["kind"] == "flip":
+                self.transform("flip", op["arg"], record=False)
             self.redo_stack.append(op)
         self.sync_toolbar()
         self.area.queue_draw()
@@ -1014,6 +1051,8 @@ class Pin(Gtk.ApplicationWindow):
             if op["kind"] == "crop":
                 x0, y0, cw, ch = op["dx"], op["dy"], op["w"], op["h"]
                 self.set_pixbuf(self.pixbuf.new_subpixbuf(x0, y0, cw, ch).copy(), x0, y0)
+            elif op["kind"] in ("rotate", "flip"):
+                self.transform(op["kind"], op["arg"], record=False)
             self.ops.append(op)
         self.sync_toolbar()
         self.area.queue_draw()
@@ -1030,6 +1069,60 @@ class Pin(Gtk.ApplicationWindow):
         self.set_pixbuf(self.pixbuf.new_subpixbuf(x0, y0, cw, ch).copy(), x0, y0)
         self.push(marker)
         self.set_tool(None)
+
+    # ---- rotate / flip ---------------------------------------------------------
+    def transform(self, kind, arg, record=True):
+        """Rotate by `arg` quarter turns clockwise or flip ("h"/"v"); undoable as a marker op."""
+        if self.typing is not None:
+            self.commit_text()
+        self.crop_pending = None
+        iw, ih = self.iw, self.ih
+        if kind == "rotate":
+            arg %= 4
+            if arg == 0:
+                return
+            rot = {1: GdkPixbuf.PixbufRotation.CLOCKWISE, 2: GdkPixbuf.PixbufRotation.UPSIDEDOWN,
+                   3: GdkPixbuf.PixbufRotation.COUNTERCLOCKWISE}[arg]
+            pixbuf = self.pixbuf.rotate_simple(rot)
+            self.turns = (self.turns + arg) % 4
+        else:
+            pixbuf = self.pixbuf.flip(arg == "h")
+            self.flipped[arg] = not self.flipped[arg]
+        transform_ops(self.ops, kind, arg, iw, ih)
+        transform_ops(self.redo_stack, kind, arg, iw, ih)
+        if self.typing is not None:
+            transform_ops([self.typing], kind, arg, iw, ih)
+        self.swap_pixbuf(pixbuf)
+        if record:
+            self.ops.append({"kind": kind, "pts": [], "color": self.color, "width": self.width, "text": "", "arg": arg})
+            self.redo_stack.clear()
+        self.sync_toolbar()
+        self.area.queue_draw()
+
+    def swap_pixbuf(self, pixbuf):
+        """Replace the image by a rotated or flipped one; the window keeps its centre."""
+        c = self.client() if self.address else None
+        old_w, old_h = round(self.iw * self.scale), round(self.ih * self.scale)
+        self.pixbuf = pixbuf
+        self.iw, self.ih = pixbuf.get_width(), pixbuf.get_height()
+        self.scale = max(self.scale, self.min_scale())
+        self.apply_scale()
+        if c is not None:
+            new_w, new_h = round(self.iw * self.scale), round(self.ih * self.scale)
+            self.move_to(c["at"][0] + (old_w - new_w) // 2, c["at"][1] + (old_h - new_h) // 2)
+
+    def reset_image(self):
+        """Back to 100 %, opaque, unrotated, unflipped (each step undoable)."""
+        if self.flipped["h"]:
+            self.transform("flip", "h")
+        if self.flipped["v"]:
+            self.transform("flip", "v")
+        if self.turns:
+            self.transform("rotate", 4 - self.turns)
+        self.set_scale(self.base_scale)
+        self.opacity = 1.0
+        self.set_opacity(1.0)
+        self.show_osd("reset")
 
     def set_pixbuf(self, pixbuf, dx, dy):
         """Swap the image for a crop (or its undo): ops move by (-dx, -dy), the
@@ -1281,8 +1374,16 @@ class Pin(Gtk.ApplicationWindow):
             self.undo()
         elif action == "redo":
             self.redo()
+        elif action == "reset":
+            self.reset_image()
         elif action == "reset_zoom":
             self.set_scale(self.base_scale); self.show_osd("100 %")
+        elif action == "rotate_cw":
+            self.transform("rotate", 1)
+        elif action == "rotate_ccw":
+            self.transform("rotate", 3)
+        elif action in ("flip_h", "flip_v"):
+            self.transform("flip", action[-1])
         elif action == "reset_opacity":
             self.opacity = 1.0; self.set_opacity(1.0); self.show_osd("100 %")
         elif action == "click_through":
@@ -1367,8 +1468,14 @@ class Pin(Gtk.ApplicationWindow):
         edit.append(f"Undo\t{key_label('undo')}", "win.undo")
         edit.append(f"Redo\t{key_label('redo')}", "win.redo")
         m.append_section(None, edit)
+        tr = Gio.Menu()
+        tr.append(f"Rotate right\t{key_label('rotate_cw')}", "win.rotate_cw")
+        tr.append(f"Rotate left\t{key_label('rotate_ccw')}", "win.rotate_ccw")
+        tr.append(f"Flip horizontally\t{key_label('flip_h')}", "win.flip_h")
+        tr.append(f"Flip vertically\t{key_label('flip_v')}", "win.flip_v")
+        m.append_section(None, tr)
         tail = Gio.Menu()
-        tail.append(f"Reset zoom\t{key_label('reset_zoom')}", "win.reset_zoom")
+        tail.append(f"Reset image\t{key_label('reset')}", "win.reset")
         tail.append(f"Click-through\t{key_label('click_through')}", "win.click_through")
         tail.append(f"Close\t{key_label('cancel')}", "win.close")
         m.append_section(None, tail)
@@ -1381,8 +1488,8 @@ class Pin(Gtk.ApplicationWindow):
         original would litter the cache (and the history) or the user's own
         folder for `pin FILE`.
         """
-        ops = [op for op in self.ops if op["kind"] != "crop"]
-        cropped = any(op["kind"] == "crop" for op in self.ops)
+        ops = [op for op in self.ops if op["kind"] not in MARKERS]
+        cropped = any(op["kind"] in MARKERS for op in self.ops)        # the pixels differ from the file
         if self.typing is not None and self.typing["text"].strip():
             ops.append(self.typing)
         # the clipboard and the save folder always get PNG: a JPEG opened via

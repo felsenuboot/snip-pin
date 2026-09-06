@@ -34,8 +34,13 @@ confirm_close_all = 1         # `snip-pin.sh close-all` asks before closing seve
 #confirm = Return KP_Enter    # apply crop, commit text
 #undo = ctrl+z
 #redo = ctrl+shift+z ctrl+y
-#reset_zoom = ctrl+0
+#reset = ctrl+0               # zoom, opacity, rotation and flips back to normal
+#reset_zoom =
 #reset_opacity = ctrl+1
+#rotate_cw = ctrl+r
+#rotate_ccw = ctrl+shift+r
+#flip_h = ctrl+h
+#flip_v = ctrl+j
 #click_through = ctrl+t       # the pin ignores the mouse until `snip-pin.sh clickthrough` (a bind) undoes it
 #width_down = bracketleft
 #width_up = bracketright
@@ -52,7 +57,7 @@ confirm_close_all = 1         # `snip-pin.sh close-all` asks before closing seve
 #color_1 = 1                  # ... color_7 = 7
 
 [mouse]
-# right, double and middle click: copy, save, close, menu, reset_zoom or none
+# right, double and middle click: copy, save, close, menu, reset, reset_zoom or none
 #right = copy
 #double = copy
 #middle = menu
