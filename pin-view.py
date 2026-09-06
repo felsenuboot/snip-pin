@@ -16,7 +16,7 @@ usage: pin-view.py IMAGE [X Y]
 Annotations (toolbar under the pin while the pointer hovers it, or keys):
   R rectangle   E ellipse   A arrow   P pen   T text   M marker   B blur (mosaic)
   N counter (click: 1, 2, 3 ...)   C crop (drag, Enter applies, Esc cancels; undoable)
-  1-7 colour    [ ] stroke width    Ctrl+Z / Ctrl+Shift+Z undo / redo
+  1-9 colour (Ctrl+click a swatch: any colour)   [ ] stroke width   Ctrl+Z / Ctrl+Shift+Z undo / redo
   With a tool selected, left-drag draws; press its key again (or Esc) to
   deselect. Copy and save bake the annotations into the image.
 """
@@ -293,10 +293,44 @@ def prune_closed(limit):
 
 
 # ---- annotation presets --------------------------------------------------
-COLORS = [("red", "#e5312b"), ("orange", "#ff8c1a"), ("yellow", "#ffd21f"),
-          ("green", "#2fbf4f"), ("blue", "#2f7fe5"), ("white", "#ffffff"),
-          ("black", "#000000")]
-WIDTHS = [("thin", 2), ("normal", 4), ("thick", 7)]      # stroke width in image px
+DEFAULT_COLORS = [("red", "#e5312b"), ("orange", "#ff8c1a"), ("yellow", "#ffd21f"),
+                  ("green", "#2fbf4f"), ("blue", "#2f7fe5"), ("white", "#ffffff"),
+                  ("black", "#000000")]
+DEFAULT_WIDTHS = [("thin", 2), ("normal", 4), ("thick", 7)]     # stroke width in image px
+COLORS = list(DEFAULT_COLORS)          # the palette in use: `palette` in the config, up to 9 (digit keys)
+WIDTHS = list(DEFAULT_WIDTHS)          # `widths` in the config, 2 to 5 values
+
+
+def is_hex_color(c):
+    return len(c) == 7 and c.startswith("#") and all(ch in "0123456789abcdefABCDEF" for ch in c[1:])
+
+
+def load_palette(setting):
+    """[(name, "#rrggbb")] from "palette = #e5312b, #ff8c1a, ..."; the default when unusable."""
+    colors = [c.strip().lower() for c in (setting or "").split(",") if c.strip()]
+    colors = [c for c in colors if is_hex_color(c)][:9]
+    if not colors:
+        return list(DEFAULT_COLORS)
+    names = dict((hexc, name) for name, hexc in DEFAULT_COLORS)
+    return [(names.get(c, f"colour {i + 1}"), c) for i, c in enumerate(colors)]
+
+
+def load_widths(setting):
+    """[(name, px)] from "widths = 2, 4, 8"; 2 to 5 increasing values between 1 and 40."""
+    try:
+        px = sorted({int(v) for v in (setting or "").split(",") if v.strip()})
+    except ValueError:
+        return list(DEFAULT_WIDTHS)
+    px = [v for v in px if 1 <= v <= 40][:5]
+    if len(px) < 2:
+        return list(DEFAULT_WIDTHS)
+    names = ["thin", "normal", "thick", "thicker", "thickest"]
+    return [(names[i] if len(px) == 3 or i < 2 else f"{v} px", v) for i, v in enumerate(px)]
+
+
+def size_for(table, width, base, factor):
+    """A per-width size: the tuned default when the width is a default one, else a rule of thumb."""
+    return table.get(width) or max(4, round(base + factor * width))
 TOOLS = [("rect", "R", "Rect", "Rectangle outline"), ("ellipse", "E", "Ellipse", "Ellipse outline"),
          ("arrow", "A", "Arrow", "Arrow"), ("pen", "P", "Pen", "Freehand pen"),
          ("text", "T", "Text", "Text: click, type, Enter"), ("counter", "N", "1 2 3", "Numbered step: click"),
@@ -329,6 +363,56 @@ window.snip-pin.ghost {{ border-style: dashed; }}          /* click-through: the
               for i, (_, hexc) in enumerate(COLORS))
 
 
+# ---- colour and width per tool ----------------------------------------------
+# With tool_colors = 1 (the default, as in Snipaste) every tool remembers the
+# colour and stroke width it was last used with: red arrows, a yellow marker,
+# black text. Kept for the session in TOOL_MEMORY and on disk.
+TOOL_MEMORY = {}
+
+
+def tool_colors_enabled():
+    return CFG.get("tool_colors", "1").strip().lower() not in ("0", "no", "false", "off")
+
+
+def remember_tool(memory, tool, color_hex, width_px):
+    if tool:
+        memory[tool] = (color_hex, width_px)
+
+
+def recall_tool(memory, tool, colors, widths):
+    """(color index, width index) remembered for the tool, or (None, None) parts when unknown."""
+    entry = memory.get(tool)
+    if not entry:
+        return None, None
+    color_hex, width_px = entry
+    ci = next((i for i, (_, h) in enumerate(colors) if h == color_hex), None)
+    wi = next((i for i, (_, px) in enumerate(widths) if px == width_px), None)
+    return ci, wi
+
+
+def tool_memory_path():
+    return os.path.join(GLib.get_user_state_dir(), "snip-pin", "tool-colors.json")
+
+
+def load_tool_memory():
+    try:
+        with open(tool_memory_path()) as f:
+            data = json.load(f)
+        TOOL_MEMORY.update({k: (v[0], int(v[1])) for k, v in data.items()
+                            if isinstance(v, list) and len(v) == 2 and is_hex_color(str(v[0]))})
+    except (OSError, ValueError, TypeError):
+        pass
+
+
+def save_tool_memory():
+    try:
+        os.makedirs(os.path.dirname(tool_memory_path()), exist_ok=True)
+        with open(tool_memory_path(), "w") as f:
+            json.dump({k: list(v) for k, v in TOOL_MEMORY.items()}, f)
+    except OSError:
+        pass
+
+
 # ---- key and mouse bindings -----------------------------------------------
 # Every keyboard action with its default binding; [keys] in the config file
 # overrides an entry ("copy = ctrl+shift+c"), several bindings are separated
@@ -346,7 +430,7 @@ ACTIONS = {
 ACTIONS.update({f"tool_{tool}": key.lower() for tool, key, _, _ in TOOLS})
 ACTIONS.update({f"command_{i}": f"ctrl+shift+{i}" for i in range(1, 10)})
 ACTIONS["open_with"] = ""
-ACTIONS.update({f"color_{i + 1}": str(i + 1) for i in range(len(COLORS))})
+ACTIONS.update({f"color_{i}": str(i) for i in range(1, 10)})
 # what the mouse does; [mouse] in the config file overrides ("right = menu")
 MOUSE_DEFAULTS = {"right": "copy", "double": "copy", "shift_double": "thumbnail", "middle": "menu"}
 MOUSE_ACTIONS = ("copy", "save", "save_as", "print", "open_with", "close", "destroy", "menu", "reset", "reset_zoom",
@@ -435,6 +519,9 @@ def key_label(action):
 
 KEYMAP = build_keymap(CFG.section("keys"))
 MOUSE = build_mouse(CFG.section("mouse"))
+COLORS[:] = load_palette(CFG.get("palette", ""))
+WIDTHS[:] = load_widths(CFG.get("widths", ""))
+load_tool_memory()
 _css = None
 
 
@@ -445,6 +532,8 @@ def apply_config(force=False):
         return
     KEYMAP = build_keymap(CFG.section("keys"))
     MOUSE = build_mouse(CFG.section("mouse"))
+    COLORS[:] = load_palette(CFG.get("palette", ""))
+    WIDTHS[:] = load_widths(CFG.get("widths", ""))
     if _css is None:
         _css = Gtk.CssProvider()
         Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), _css,
@@ -874,7 +963,7 @@ def mosaic_pixbuf(pixbuf, op):
     cached = op.get("_mosaic")
     if cached and cached[0] == key:
         return cached[1]
-    blk = MOSAIC_PX.get(op["width"], 9)
+    blk = size_for(MOSAIC_PX, op["width"], 1, 1.9)
     sub = pixbuf.new_subpixbuf(x0, y0, w, h)
     small = sub.scale_simple(max(1, w // blk), max(1, h // blk), GdkPixbuf.InterpType.BILINEAR)
     big = small.scale_simple(w, h, GdkPixbuf.InterpType.NEAREST)
@@ -910,7 +999,7 @@ def draw_op(cr, pixbuf, op, caret=False):
             cr.stroke()
     elif k == "counter":
         x, y = pts[0]
-        rad = COUNTER_R.get(w, 14)
+        rad = size_for(COUNTER_R, w, 8, 1.4)
         cr.set_source_rgb(r, g, b)
         cr.arc(x, y, rad, 0, 2 * math.pi)
         cr.fill()
@@ -961,7 +1050,7 @@ def draw_op(cr, pixbuf, op, caret=False):
             cr.rectangle(x0, y0, mw, mh)
             cr.fill()
     elif k == "text":
-        size = TEXT_PX.get(w, 22)
+        size = size_for(TEXT_PX, w, 12, 2.5)
         x, y = pts[0]
         layout = PangoCairo.create_layout(cr)
         layout.set_font_description(Pango.FontDescription.from_string(f"Sans Bold {size}px"))
@@ -1476,6 +1565,12 @@ class Pin(Gtk.ApplicationWindow):
         self.pending = None
         if tool != "crop":
             self.crop_pending = None
+        if tool_colors_enabled() and tool is not None and tool != self.tool:
+            ci, wi = recall_tool(TOOL_MEMORY, tool, COLORS, WIDTHS)
+            if ci is not None:
+                self.color_idx = ci
+            if wi is not None:
+                self.width_idx = wi
         self.tool = tool
         if tool is None:
             self.remove_css_class("editing")
@@ -1686,14 +1781,15 @@ class Pin(Gtk.ApplicationWindow):
             b = add(Gtk.Button())
             b.add_css_class("swatch")
             b.add_css_class(f"c{i}")
-            b.set_tooltip_text(f"{name}  [{i + 1}]")
-            b.connect("clicked", lambda _b, i=i: self.set_color(i))
+            b.set_tooltip_text(f"{name}  [{i + 1}]  (Ctrl+click: choose a colour)")
+            b.connect("clicked", lambda _b, i=i: self.on_swatch(i))
             self.swatches.append(b)
         box.append(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL))
 
         self.width_btns = []
+        dots = {0: "·", len(WIDTHS) - 1: "●"}
         for i, (name, px) in enumerate(WIDTHS):
-            b = add(Gtk.ToggleButton(label="●" if i == 2 else ("•" if i == 1 else "·")))
+            b = add(Gtk.ToggleButton(label=dots.get(i, "•")))
             b.set_tooltip_text(f"{name} ({px} px)  [ [ / ] ]")
             b.connect("toggled", self.on_width_btn, i)
             self.width_btns.append(b)
@@ -1735,9 +1831,12 @@ class Pin(Gtk.ApplicationWindow):
             self.sync_toolbar()      # keep one width selected
 
     def set_color(self, idx):
-        self.color_idx = idx % len(COLORS)
+        if not 0 <= idx < len(COLORS):
+            return
+        self.color_idx = idx
         if self.typing is not None:
             self.typing["color"] = self.color
+        self.note_tool_choice()
         self.sync_toolbar()
         self.area.queue_draw()
 
@@ -1745,8 +1844,40 @@ class Pin(Gtk.ApplicationWindow):
         self.width_idx = max(0, min(len(WIDTHS) - 1, idx))
         if self.typing is not None:
             self.typing["width"] = self.width
+        self.note_tool_choice()
         self.sync_toolbar()
         self.area.queue_draw()
+
+    def note_tool_choice(self):
+        """A colour or width picked while a tool is active becomes that tool's memory."""
+        if tool_colors_enabled() and self.tool is not None:
+            remember_tool(TOOL_MEMORY, self.tool, COLORS[self.color_idx][1], WIDTHS[self.width_idx][1])
+            save_tool_memory()
+
+    def on_swatch(self, idx):
+        """A click picks the swatch; with Ctrl held it opens the colour chooser for it."""
+        keyboard = Gdk.Display.get_default().get_default_seat().get_keyboard()
+        if keyboard is not None and keyboard.get_modifier_state() & Gdk.ModifierType.CONTROL_MASK:
+            self.pick_color(idx)
+        else:
+            self.set_color(idx)
+
+    def pick_color(self, idx):
+        """Ctrl+click on a swatch: a colour dialog replaces that swatch for the session."""
+        dialog = Gtk.ColorDialog(with_alpha=False)
+        initial = Gdk.RGBA()
+        initial.parse(COLORS[idx][1])
+
+        def done(d, result):
+            try:
+                rgba = d.choose_rgba_finish(result)
+            except GLib.Error:
+                return
+            hexc = "#%02x%02x%02x" % (round(rgba.red * 255), round(rgba.green * 255), round(rgba.blue * 255))
+            COLORS[idx] = (hexc, hexc)
+            _css.load_from_string(build_css(border_color()))
+            self.set_color(idx)
+        dialog.choose_rgba(self, initial, None, done)
 
     # ---- input ------------------------------------------------------------
     def on_drag_begin(self, gesture, x, y):

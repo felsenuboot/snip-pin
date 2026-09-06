@@ -13,6 +13,9 @@ format = png                  # quick save and autosave: png, jpg or webp
 quality = 90                  # JPEG / WebP quality, 1-100
 copy_file = always            # a copied pin is offered as a file (text/uri-list) as well as image/png; never = PNG only
 sound = off                   # on copy and save: off, default (the sound theme's screen-capture), or a sound file
+#palette = #e5312b, #ff8c1a, #ffd21f, #2fbf4f, #2f7fe5, #ffffff, #000000   # up to 9 swatches, on keys 1-9
+#widths = 2, 4, 7             # stroke widths in px, 2 to 5 values (also text size, badge and blur block size)
+tool_colors = 1               # every tool remembers its own colour and width (red arrows, yellow marker, ...)
 elements_budget_ms = 150      # time the element detector may spend joining edges
 
 # the selection (slurp): outline colour and width, the dim over the rest of the

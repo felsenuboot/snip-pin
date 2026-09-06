@@ -166,8 +166,10 @@ draw with the left mouse button; with no tool selected the pin moves as usual.
 | Blur | `B` | pixelates a rectangle, for hiding secrets |
 | Crop | `C` | drag the part to keep, `Enter` applies, `Esc` cancels; undoable, the window shrinks in place |
 
-Colour: `1`–`7` or the swatches. Stroke width: `[` / `]` or the three dots
-(also sets text size and blur block size). Undo / redo: `Ctrl+Z` /
+Colour: `1`–`9` or the swatches; `Ctrl`+click a swatch to replace it with
+any colour for the session. Stroke width: `[` / `]` or the dots (also sets
+text size and blur block size). Every tool remembers the colour and width it
+was last used with (`tool_colors = 0` for one colour for all). Undo / redo: `Ctrl+Z` /
 `Ctrl+Shift+Z`. Deselect a tool with its key again, its button or `Esc`.
 
 ## History
@@ -219,6 +221,9 @@ effective settings and where each comes from.
 | `tap_ms` | `300` | double-tap window for opening the history |
 | `border` | `#ff9f1c` | colour of the 2 px border a pin draws around itself |
 | `save_dir` | unset | where `Ctrl+S` saves; `~` and `$VARS` are expanded |
+| `palette` | 7 colours | up to 9 `#rrggbb` swatches, comma separated, on keys `1`–`9` |
+| `widths` | `2, 4, 7` | 2 to 5 stroke widths in px |
+| `tool_colors` | `1` | each tool remembers its own colour and width, across pins and restarts |
 | `sound` | `off` | play a sound on copy and save: `default` (the sound theme's screen-capture event via `canberra-gtk-play`, or GTK's player) or a sound file |
 | `copy_file` | `always` | a copied pin is offered as a file too, so file managers and chat clients paste a file; `never` offers PNG only |
 | `filename` | `pin_%Y%m%d_%H%M%S` | strftime pattern for saved files (quick save, Save as, autosave, `save` mode) |

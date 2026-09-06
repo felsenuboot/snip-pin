@@ -30,6 +30,7 @@ layout) may still change.
 - `Ctrl+P` prints a pin through GTK's print dialog, annotations included, scaled to fit the page and centred (#85).
 - `sound = default` (or a file) plays a sound when a snip is copied or saved, from a pin or from the `copy` / `save` modes (#88).
 - Custom commands: `[commands]` entries (`Open in GIMP = gimp %f`) appear under *Send to* in the menu, the first nine on `Ctrl+Shift+1` … `9`, and run detached with the exported image; *Open with…* asks the desktop which application to use (#86).
+- Palette: `palette` sets up to nine swatches (keys `1`–`9`), `widths` two to five stroke widths, `Ctrl`+click on a swatch opens a colour chooser for the session, and every tool remembers the colour and width it was last used with (`tool_colors = 0` turns that off) (#79).
 
 ## [0.3.0] – 2026-09-06
 
