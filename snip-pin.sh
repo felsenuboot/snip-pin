@@ -22,6 +22,7 @@
 #   snip-pin.sh repeat [N] capture the area of the N-th last snip again (default 1)
 #   snip-pin.sh toggle     hide every pin, or show them all again where they were
 #   snip-pin.sh close-all  close every pin (asks first when there are several)
+#   snip-pin.sh clickthrough  toggle click-through for every pin (the mouse goes to what is below)
 #   snip-pin.sh clear      empty the history (kept snips stay)
 #   snip-pin.sh abort      end the selection this script started (right-click bind)
 #   snip-pin.sh doctor     check the dependencies (exit 1 if a required one is missing)
@@ -238,9 +239,10 @@ PY
         fi ;;
     abort)
         abort_selection; exit 0 ;;
-    toggle|close-all)
+    toggle|close-all|clickthrough)
         # a request to the running viewer; without one there is nothing to do
-        exec "$VIEWER" "--$1" ;;
+        cmd=$1; [[ "$cmd" == clickthrough ]] && cmd=click-through
+        exec "$VIEWER" "--$cmd" ;;
     doctor)
         missing=0
         check() {   # name, required|optional, what it is for
@@ -307,7 +309,7 @@ PY
         exit 0 ;;
     --version|-V)
         cat "$HERE/VERSION"; exit 0 ;;
-    *)  echo "usage: snip-pin.sh [copy|save|last|history|clipboard|pin FILE|screen [all]|repeat [N]|toggle|close-all|clear|doctor|config|--version]" >&2
+    *)  echo "usage: snip-pin.sh [copy|save|last|history|clipboard|pin FILE|screen [all]|repeat [N]|toggle|close-all|clickthrough|clear|doctor|config|--version]" >&2
         echo "  (no argument: select a region, capture it, then copy and pin it, or what \`action\` says)" >&2; exit 2 ;;
 esac
 

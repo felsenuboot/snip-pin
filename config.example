@@ -36,6 +36,7 @@ confirm_close_all = 1         # `snip-pin.sh close-all` asks before closing seve
 #redo = ctrl+shift+z ctrl+y
 #reset_zoom = ctrl+0
 #reset_opacity = ctrl+1
+#click_through = ctrl+t       # the pin ignores the mouse until `snip-pin.sh clickthrough` (a bind) undoes it
 #width_down = bracketleft
 #width_up = bracketright
 #menu = F10
