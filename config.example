@@ -11,6 +11,7 @@ border = #ff9f1c              # colour of the 2 px border around a pin
 filename = pin_%Y%m%d_%H%M%S  # strftime pattern for saved files (quick save, Save as, autosave)
 format = png                  # quick save and autosave: png, jpg or webp
 quality = 90                  # JPEG / WebP quality, 1-100
+copy_file = always            # a copied pin is offered as a file (text/uri-list) as well as image/png; never = PNG only
 elements_budget_ms = 150      # time the element detector may spend joining edges
 
 # the selection (slurp): outline colour and width, the dim over the rest of the
