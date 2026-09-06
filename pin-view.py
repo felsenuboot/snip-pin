@@ -131,7 +131,7 @@ def hand_over(args):
         s.close()
 
 
-COMMANDS = ("--toggle", "--close-all", "--click-through", "--reopen")   # requests to the running pins, not a file
+COMMANDS = ("--toggle", "--close-all", "--click-through", "--reopen", "--group")   # requests to the pins, not a file
 
 
 def render_text_png(text, out_path, font="Sans 11", max_width=900, margin=15, fg="#000000", bg="#ffffff"):
@@ -188,7 +188,7 @@ if __name__ == "__main__" and len(sys.argv) >= 2:
         render_text_png(body, a[1], a[2] or "Sans 11", width, margin, a[5] or "#000000", a[6] or "#ffffff")
         sys.exit(0)
     if sys.argv[1] in COMMANDS:
-        if hand_over(sys.argv[1:2]) or sys.argv[1] != "--reopen":
+        if hand_over(sys.argv[1:3]) or sys.argv[1] != "--reopen":
             sys.exit(0)                        # no viewer: no pins to act on; only --reopen starts one
     elif hand_over([os.path.abspath(sys.argv[1])] + sys.argv[2:]):
         log(f"handed over {sys.argv[1:]}")
@@ -1434,6 +1434,7 @@ class Pin(Gtk.ApplicationWindow):
         self._syncing = False
         self.hovered = False
         self.hidden = False           # set by toggle_pins while every pin is hidden
+        self.group = CURRENT_GROUP[0] # pins of other groups are hidden until `snip-pin.sh group` shows them
         self.ghost = False            # click-through: an empty input region, see set_click_through
         self.toolbar_shown = False    # tracked ourselves: get_visible() is true during the fade-out
         self.hide_timer = None
@@ -1520,6 +1521,9 @@ class Pin(Gtk.ApplicationWindow):
             act = Gio.SimpleAction.new(name, None)
             act.connect("activate", lambda *a, name=name: self.run_action(name))
             self.add_action(act)
+        grp = Gio.SimpleAction.new("group", GLib.VariantType.new("i"))
+        grp.connect("activate", lambda a, p: self.move_to_group(p.get_int32()))
+        self.add_action(grp)
         self.smooth_action = Gio.SimpleAction.new_stateful("smooth", None, GLib.Variant.new_boolean(self.smooth))
         self.smooth_action.connect("activate", lambda a, p: self.set_smooth(not self.smooth))
         self.add_action(self.smooth_action)
@@ -1700,6 +1704,13 @@ class Pin(Gtk.ApplicationWindow):
         self.apply_scale()
         if c is not None:
             self.move_to(c["at"][0], c["at"][1])          # Hyprland re-centres on resize; keep the corner
+
+    def move_to_group(self, n):
+        """Put this pin into group n; it disappears until that group is shown."""
+        self.group = n
+        if n != CURRENT_GROUP[0]:
+            hide_pin(self)
+            notify(f"Moved to group {n}")
 
     def toggle_thumbnail(self):
         if self.thumb is not None:
@@ -2497,6 +2508,12 @@ class Pin(Gtk.ApplicationWindow):
         m.append_section(None, tr)
         tail = Gio.Menu()
         tail.append(f"Thumbnail\t{key_label('thumbnail')}", "win.thumbnail")
+        groups = Gio.Menu()
+        for n in range(1, 6):
+            item = Gio.MenuItem.new(f"Group {n}" + ("  (current)" if n == CURRENT_GROUP[0] else ""), None)
+            item.set_action_and_target_value("win.group", GLib.Variant.new_int32(n))
+            groups.append_item(item)
+        tail.append_submenu("Move to group", groups)
         tail.append("Smooth scaling", "win.smooth")
         tail.append(f"Reset image\t{key_label('reset')}", "win.reset")
         tail.append(f"Click-through\t{key_label('click_through')}", "win.click_through")
@@ -2723,24 +2740,74 @@ def pins(app):
     return [w for w in app.get_windows() if isinstance(w, Pin)]
 
 
+def hide_pin(w):
+    """Unmap a pin, remembering where it was (Hyprland forgets an unmapped window's position)."""
+    if not w.get_visible():
+        return
+    c = w.client()
+    if c is not None:
+        w.pos = (c["at"][0] + BORDER, c["at"][1] + BORDER)
+    w.hidden = True
+    w.set_visible(False)
+
+
+def show_pin(w):
+    if w.get_visible():
+        return
+    w.hidden = False
+    w.address = None                       # a remapped surface is a new Hyprland client
+    w.present()
+    w.place()
+
+
 def toggle_pins(app):
-    """Hide every pin, or show them all again where they were (Hyprland forgets
-    the position of an unmapped window, so each pin re-places itself)."""
-    wins = pins(app)
+    """Hide every pin of the current group, or show them all again where they were."""
+    wins = [w for w in pins(app) if w.group == CURRENT_GROUP[0]]
     if any(w.get_visible() for w in wins):
         for w in wins:
-            if w.get_visible():
-                c = w.client()
-                if c is not None:
-                    w.pos = (c["at"][0] + BORDER, c["at"][1] + BORDER)
-                w.hidden = True
-                w.set_visible(False)
+            hide_pin(w)
     else:
         for w in wins:
-            w.hidden = False
-            w.address = None               # a remapped surface is a new Hyprland client
-            w.present()
-            w.place()
+            show_pin(w)
+
+
+# ---- groups --------------------------------------------------------------------
+# Every pin belongs to a group (new pins join the current one); one group is
+# on screen at a time, `snip-pin.sh group next|prev|N` swaps them, as in
+# Snipaste's "switch to another image group".
+CURRENT_GROUP = [1]
+
+
+def next_group(current, groups, direction):
+    """The group after (1) or before (-1) `current` among `groups` (cycling); current if there is nothing else."""
+    order = sorted(set(groups) | {current})
+    if len(order) < 2:
+        return current
+    i = order.index(current)
+    return order[(i + direction) % len(order)]
+
+
+def switch_group(app, arg):
+    """Show the pins of group `arg` ("next", "prev" or a number) instead of the current group's."""
+    wins = pins(app)
+    groups = [w.group for w in wins]
+    if arg in ("next", "prev"):
+        target = next_group(CURRENT_GROUP[0], groups, 1 if arg == "next" else -1)
+    else:
+        try:
+            target = max(1, int(arg))
+        except (TypeError, ValueError):
+            return
+    CURRENT_GROUP[0] = target
+    for w in wins:
+        if w.group != target:
+            hide_pin(w)
+    shown = [w for w in wins if w.group == target]
+    for w in shown:
+        show_pin(w)
+        w.show_osd(f"group {target}" + (f" / {len(set(groups) | {target})}" if groups else ""))
+    if not shown:
+        notify(f"Group {target}: no pins (new pins join it)")
 
 
 def close_all(app):
@@ -2807,8 +2874,10 @@ def reopen_pin(app):
     return False
 
 
-def run_command(app, cmd):
-    if cmd == "--reopen":
+def run_command(app, cmd, arg=None):
+    if cmd == "--group":
+        switch_group(app, arg or "next")
+    elif cmd == "--reopen":
         if not reopen_pin(app) and not app.get_windows():
             app.quit()
     elif cmd == "--toggle":
@@ -2896,7 +2965,7 @@ def serve(app):
             conn.sendall(b"1")
             log(f"request {args}")
             if args and args[0] in COMMANDS:
-                run_command(app, args[0])
+                run_command(app, args[0], args[1] if len(args) > 1 else None)
             elif args:
                 open_pin(app, args)
         except OSError:
@@ -2928,7 +2997,7 @@ def main():
     def activate(app):
         serve(app)
         if sys.argv[1] in COMMANDS:
-            run_command(app, sys.argv[1])
+            run_command(app, sys.argv[1], sys.argv[2] if len(sys.argv) > 2 else None)
         else:
             open_pin(app, [os.path.abspath(sys.argv[1])] + sys.argv[2:])
     app.connect("activate", activate)

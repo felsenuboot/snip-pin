@@ -711,3 +711,12 @@ def test_log_writes_only_when_debug_is_on(tmp_path, view, monkeypatch):
     big.write_bytes(b"x" * (view.LOG_MAX + 1))
     view.rotate_log(str(big))
     assert not big.exists() and (tmp_path / "snip-pin" / "log.1").exists()
+
+
+def test_next_group_cycles_existing_groups(view):
+    assert view.next_group(1, [1, 1, 3, 2], 1) == 2
+    assert view.next_group(3, [1, 3], 1) == 1                    # wraps
+    assert view.next_group(1, [1, 3], -1) == 3
+    assert view.next_group(2, [1, 3], 1) == 3                    # the current group counts even when empty
+    assert view.next_group(1, [], 1) == 1 and view.next_group(1, [1], -1) == 1
+    assert "--group" in view.COMMANDS
