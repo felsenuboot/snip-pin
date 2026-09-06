@@ -147,6 +147,7 @@ opened from the picker appear centred.
 | `snip-pin.sh history` | open a thumbnail grid of all cached snips, newest first |
 | `snip-pin.sh clipboard` | pin the image in the clipboard (PNG, JPEG, WebP, … or a copied image file), centred on the screen |
 | `snip-pin.sh screen` | capture the monitor under the pointer without a selection and pin it; `screen all` captures every monitor as one image |
+| `snip-pin.sh repeat` | capture the area of the last snip again (a progress bar, a chat window); `repeat 3` the third-last area |
 | `snip-pin.sh clear` | delete every snip that is not kept |
 | `snip-pin.sh doctor` | check the dependencies and print versions |
 
@@ -179,6 +180,7 @@ effective settings and where each comes from.
 | `sel_fill` | `#00000000` | fill inside the selection |
 | `sel_size` | `1` | show the selection's size while dragging; `0` hides it |
 | `cursor` | `0` | `1` includes the mouse cursor in the capture |
+| `areas` | `8` | capture areas remembered for `repeat` |
 
 Without `save_dir`, `Ctrl+S` saves to the folder named in
 `~/.config/ml4w/settings/screenshot-folder` if that file exists (ML4W

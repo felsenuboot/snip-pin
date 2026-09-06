@@ -17,6 +17,7 @@
 #   snip-pin.sh pin FILE   pin an image file, centred (used by the history picker)
 #   snip-pin.sh screen     capture the monitor under the pointer, no selection
 #   snip-pin.sh screen all capture every monitor as one image
+#   snip-pin.sh repeat [N] capture the area of the N-th last snip again (default 1)
 #   snip-pin.sh clear      empty the history (kept snips stay)
 #   snip-pin.sh abort      end the selection this script started (right-click bind)
 #   snip-pin.sh doctor     check the dependencies (exit 1 if a required one is missing)
@@ -80,6 +81,7 @@ SEL_MASK=$(color_or SNIP_PIN_SEL_MASK '#00000080')         #        dim over the
 SEL_FILL=$(color_or SNIP_PIN_SEL_FILL '#00000000')         #        fill inside the selection
 SEL_SIZE=$(int_or SNIP_PIN_SEL_SIZE 1)                    #        1 = show the size while dragging
 CURSOR=$(int_or SNIP_PIN_CURSOR 0)                        # 1 = include the mouse cursor in the capture
+AREAS=$(int_or SNIP_PIN_AREAS 8)                          # how many capture areas `repeat` remembers
 
 mkdir -p "$CACHE/kept" "$STATE"
 [[ "$KEEP" -gt 0 ]] && find "$CACHE" -maxdepth 1 -name '*.png' -mtime +"$KEEP" -delete 2>/dev/null
@@ -175,6 +177,12 @@ PY
                 | "\(.w | floor)x\(.h | floor)+\(.x)+\(.y)"
               end')
         [[ "$SNIP_GEOM" =~ ^[0-9]+x[0-9]+\+-?[0-9]+\+-?[0-9]+$ ]] || { notify "No monitor found"; exit 1; } ;;
+    repeat)
+        # the N-th most recent capture area (newest first in $CACHE/areas)
+        n=${2:-1}
+        [[ "$n" =~ ^[1-9][0-9]*$ ]] || { echo "usage: snip-pin.sh repeat [N]" >&2; exit 1; }
+        SNIP_GEOM=$(sed -n "${n}p" "$CACHE/areas" 2>/dev/null)
+        [[ "$SNIP_GEOM" =~ ^[0-9]+x[0-9]+\+-?[0-9]+\+-?[0-9]+$ ]] || { notify "No previous area to repeat"; exit 0; } ;;
     "")
         # Double tap: if another instance started a selection less than TAP_MS
         # ago, tell it to abort (flag file, and end slurp if it is already up)
@@ -252,10 +260,11 @@ PY
         show sel_fill '#00000000'
         show sel_size 1
         show cursor 0
+        show areas 8
         exit 0 ;;
     --version|-V)
         cat "$HERE/VERSION"; exit 0 ;;
-    *)  echo "usage: snip-pin.sh [last|history|clipboard|pin FILE|screen [all]|clear|doctor|config|--version]" >&2
+    *)  echo "usage: snip-pin.sh [last|history|clipboard|pin FILE|screen [all]|repeat [N]|clear|doctor|config|--version]" >&2
         echo "  (no argument: select a region, capture it, pin it)" >&2; exit 2 ;;
 esac
 
@@ -328,6 +337,12 @@ fi
 
 IFS='x+' read -r W H X Y <<< "$geom"
 [[ "$W" -lt 1 || "$H" -lt 1 ]] && exit 0
+
+# remember the area for `repeat`: newest first, no duplicates, the last AREAS
+if [[ "$AREAS" -gt 0 ]]; then
+    { echo "$geom"; grep -vx -- "$geom" "$CACHE/areas" 2>/dev/null || true; } | head -n "$AREAS" > "$CACHE/areas.new"
+    mv -f "$CACHE/areas.new" "$CACHE/areas"
+fi
 
 file="$CACHE/$(date +%Y%m%d_%H%M%S_%N)_x${X}_y${Y}.png"
 grim_opts=(-l 1)

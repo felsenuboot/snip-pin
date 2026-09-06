@@ -17,6 +17,7 @@ sel_mask = #00000080
 sel_fill = #00000000
 sel_size = 1                  # 0 hides the WxH readout while dragging
 cursor = 0                    # 1 includes the mouse cursor in the capture
+areas = 8                     # capture areas remembered for `snip-pin.sh repeat [N]`
 
 [keys]
 # action = binding [binding ...]; modifiers ctrl, shift, alt, super; an empty

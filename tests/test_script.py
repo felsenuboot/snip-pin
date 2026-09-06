@@ -381,3 +381,38 @@ def test_screen_all_is_the_bounding_box(tmp_path):
     env["PATH"] = f"{b}:{env['PATH']}"
     assert run(["screen", "all"], env).returncode == 0
     assert "grim -g 0,0 4520x1920" in log.read_text()
+
+
+def test_repeat_reuses_remembered_areas(tmp_path):
+    viewer_log = tmp_path / "viewer.log"
+    env = make_env(tmp_path, viewer_log)
+    b, log = fake_tools(tmp_path)
+    env["PATH"] = f"{b}:{env['PATH']}"
+    assert run(["repeat"], env).returncode == 0                 # nothing remembered yet: a toast, no capture
+    assert not log.exists()
+    env["SNIP_GEOM"] = "100x50+10+20"
+    assert run([], env).returncode == 0
+    env["SNIP_GEOM"] = "300x200+5+5"
+    assert run([], env).returncode == 0
+    env["SNIP_GEOM"] = "300x200+5+5"                             # a duplicate is not stored twice
+    assert run([], env).returncode == 0
+    del env["SNIP_GEOM"]
+    areas = (tmp_path / "cache" / "snip-pin" / "areas").read_text().split()
+    assert areas == ["300x200+5+5", "100x50+10+20"]
+    assert run(["repeat"], env).returncode == 0
+    assert "grim -g 5,5 300x200" in log.read_text().splitlines()[-2]
+    assert run(["repeat", "2"], env).returncode == 0
+    assert "grim -g 10,20 100x50" in log.read_text().splitlines()[-2]
+    assert run(["repeat", "9"], env).returncode == 0 and log.read_text().count("grim") == 5
+    assert run(["repeat", "x"], env).returncode == 1
+
+
+def test_areas_setting_limits_the_list(tmp_path):
+    env = make_env(tmp_path, tmp_path / "viewer.log")
+    b, log = fake_tools(tmp_path)
+    env["PATH"] = f"{b}:{env['PATH']}"
+    env["SNIP_PIN_AREAS"] = "2"
+    for g in ("10x10+0+0", "20x20+0+0", "30x30+0+0"):
+        env["SNIP_GEOM"] = g
+        run([], env)
+    assert (tmp_path / "cache" / "snip-pin" / "areas").read_text().split() == ["30x30+0+0", "20x20+0+0"]
