@@ -29,6 +29,7 @@ layout) may still change.
 - Copying from a pin offers the image as `image/png` and as a file (`text/uri-list`) at once, so file managers and chat clients paste a file while image editors take the pixels; `copy_file = never` keeps PNG only. The viewer owns the clipboard itself and lingers after the last pin until another program takes the clipboard over (#83).
 - `Ctrl+P` prints a pin through GTK's print dialog, annotations included, scaled to fit the page and centred (#85).
 - `sound = default` (or a file) plays a sound when a snip is copied or saved, from a pin or from the `copy` / `save` modes (#88).
+- Custom commands: `[commands]` entries (`Open in GIMP = gimp %f`) appear under *Send to* in the menu, the first nine on `Ctrl+Shift+1` … `9`, and run detached with the exported image; *Open with…* asks the desktop which application to use (#86).
 
 ## [0.3.0] – 2026-09-06
 

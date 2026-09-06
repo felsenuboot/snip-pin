@@ -42,6 +42,8 @@ thumb_size = 75               # side of the tile a pin collapses into (Ctrl+M, S
 #save = ctrl+s
 #save_as = ctrl+shift+s       # file dialog; PNG, JPEG or WebP by the extension you type; the pin stays open
 #print = ctrl+p               # GTK's print dialog (printers, print to PDF); the pin stays open
+#open_with =                  # the desktop's application chooser for the image
+#command_1 = ctrl+shift+1     # ... command_9: the [commands] entries in order
 #close =                      # close without copying (cancel does that when no tool is active)
 #destroy = shift+Escape       # close for good: `reopen` cannot bring it back
 #cancel = Escape              # cancel crop / deselect tool / close
@@ -73,9 +75,17 @@ thumb_size = 75               # side of the tile a pin collapses into (Ctrl+M, S
 #color_1 = 1                  # ... color_7 = 7
 
 [mouse]
-# right, double, shift_double and middle click: copy, save, save_as, print, close, destroy, menu,
-# reset, reset_zoom, thumbnail or none
+# right, double, shift_double and middle click: copy, save, save_as, print, open_with, close,
+# destroy, menu, reset, reset_zoom, thumbnail, command_1 ... command_9 or none
 #right = copy
 #double = copy
 #shift_double = thumbnail
 #middle = menu
+
+[commands]
+# Programs to send a pin to, in the menu under "Send to"; the first nine get
+# Ctrl+Shift+1 ... 9. %f is a temporary PNG with the annotations baked in,
+# %F the original file, %% a literal percent sign.
+#Open in GIMP = gimp %f
+#Upload = sh -c 'curl -sF "file=@%f" https://0x0.st | wl-copy'
+#Copy path = sh -c 'printf %%s "%F" | wl-copy'
