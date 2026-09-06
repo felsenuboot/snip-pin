@@ -158,20 +158,31 @@ asks once, then deletes everything that is not kept.
 
 ## Configuration
 
-Everything is read from the environment of the bound command.
+Settings live in `~/.config/snip-pin/config` (`key = value` lines, `#`
+comments; [`config.example`](config.example) lists everything). An environment
+variable `SNIP_PIN_<KEY>` on the bound command overrides a key from the file.
+The viewer re-reads the file whenever a pin is opened, so edits apply to the
+next pin without restarting anything. `snip-pin.sh config` prints the
+effective settings and where each comes from.
 
-| Variable | Default | Meaning |
+| Key | Default | Meaning |
 |---|---|---|
-| `SNIP_PIN_KEEP_DAYS` | `7` | days to keep snips; `0` keeps them forever |
-| `SNIP_PIN_TAP_MS` | `300` | double-tap window for opening the history |
-| `SNIP_PIN_BORDER` | `#ff9f1c` | colour of the 2 px border a pin draws around itself |
-| `SNIP_PIN_SAVE_DIR` | unset | where `Ctrl+S` saves; `~` and `$VARS` are expanded |
-| `SNIP_ELEMENTS_BUDGET_MS` | `150` | time the element detector may spend joining edges |
+| `keep_days` | `7` | days to keep snips; `0` keeps them forever |
+| `tap_ms` | `300` | double-tap window for opening the history |
+| `border` | `#ff9f1c` | colour of the 2 px border a pin draws around itself |
+| `save_dir` | unset | where `Ctrl+S` saves; `~` and `$VARS` are expanded |
+| `elements_budget_ms` | `150` | time the element detector may spend joining edges |
 
-Without `SNIP_PIN_SAVE_DIR`, `Ctrl+S` saves to the folder named in
+Without `save_dir`, `Ctrl+S` saves to the folder named in
 `~/.config/ml4w/settings/screenshot-folder` if that file exists (ML4W
 dotfiles), otherwise to the XDG pictures directory (`~/Pictures` or its
 localised name).
+
+Keys and mouse buttons on a pin are rebindable in the `[keys]` and `[mouse]`
+sections: `copy = ctrl+shift+c`, `redo = ctrl+y`, `right = menu` (Snipaste
+style: right-click opens the menu, `double = close`). Modifiers are `ctrl`,
+`shift`, `alt`, `super`; several bindings are separated by spaces; an empty
+value unbinds. Colours stay on the digits.
 
 <details>
 <summary>Design notes and testing</summary>

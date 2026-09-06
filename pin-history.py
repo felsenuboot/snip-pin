@@ -40,13 +40,14 @@ MOVE_KEYS = {Gdk.KEY_Left: -1, Gdk.KEY_a: -1, Gdk.KEY_h: -1, Gdk.KEY_Right: 1, G
              Gdk.KEY_Up: -COLUMNS, Gdk.KEY_w: -COLUMNS, Gdk.KEY_k: -COLUMNS,
              Gdk.KEY_Down: COLUMNS, Gdk.KEY_s: COLUMNS, Gdk.KEY_j: COLUMNS}
 
-CSS = """
-window.snip-history { border: 2px solid #ff9f1c; }
-.snip-thumb { padding: 6px; border-radius: 8px; }
-.snip-thumb picture { border-radius: 4px; }
-.snip-thumb label { font-size: 0.85em; opacity: 0.8; }
-.snip-thumb.kept label { color: #ff9f1c; opacity: 1; }
-.snip-hint { opacity: 0.6; font-size: 0.9em; }
+BORDER_COLOR = os.environ.get("SNIP_PIN_BORDER", "#ff9f1c")   # snip-pin.sh exports the config file's value
+CSS = f"""
+window.snip-history {{ border: 2px solid {BORDER_COLOR}; }}
+.snip-thumb {{ padding: 6px; border-radius: 8px; }}
+.snip-thumb picture {{ border-radius: 4px; }}
+.snip-thumb label {{ font-size: 0.85em; opacity: 0.8; }}
+.snip-thumb.kept label {{ color: {BORDER_COLOR}; opacity: 1; }}
+.snip-hint {{ opacity: 0.6; font-size: 0.9em; }}
 """
 
 

@@ -1,0 +1,43 @@
+# snip-pin configuration: copy to ~/.config/snip-pin/config and edit.
+# `key = value` lines; `#` starts a comment. An environment variable
+# SNIP_PIN_<KEY> on the bound command overrides a top-level key. The viewer
+# re-reads this file whenever a pin is opened, so edits apply to the next pin.
+
+keep_days = 7                 # days to keep snips in the cache; 0 keeps them forever
+tap_ms = 300                  # double-tap window (ms) for opening the history
+border = #ff9f1c              # colour of the 2 px border around a pin
+#save_dir = ~/Pictures/Screenshots   # where Ctrl+S saves; default: ML4W setting or the XDG pictures folder
+elements_budget_ms = 150      # time the element detector may spend joining edges
+
+[keys]
+# action = binding [binding ...]; modifiers ctrl, shift, alt, super; an empty
+# value unbinds. Key names as GDK knows them (Escape, Return, F10, bracketleft,
+# comma, ...) or a single character. Defaults shown.
+#copy = ctrl+c
+#save = ctrl+s
+#close =                      # close without copying (cancel does that when no tool is active)
+#cancel = Escape              # cancel crop / deselect tool / close
+#confirm = Return KP_Enter    # apply crop, commit text
+#undo = ctrl+z
+#redo = ctrl+shift+z ctrl+y
+#reset_zoom = ctrl+0
+#reset_opacity = ctrl+1
+#width_down = bracketleft
+#width_up = bracketright
+#menu = F10
+#tool_rect = r
+#tool_ellipse = e
+#tool_arrow = a
+#tool_pen = p
+#tool_text = t
+#tool_counter = n
+#tool_marker = m
+#tool_blur = b
+#tool_crop = c
+#color_1 = 1                  # ... color_7 = 7
+
+[mouse]
+# right, double and middle click: copy, save, close, menu, reset_zoom or none
+#right = copy
+#double = copy
+#middle = menu

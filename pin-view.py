@@ -21,6 +21,7 @@ import datetime
 import json
 import math
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -82,8 +83,90 @@ MIN_PX = 40                                        # the pin's longer side never
 MIN_SIDE = 4                                       # ... and the shorter side stays grabbable
 MAX_SCALE = 8.0
 BORDER = 2                                         # px, drawn by the viewer itself
-BORDER_COLOR = os.environ.get("SNIP_PIN_BORDER", "#ff9f1c")
+DEFAULT_BORDER_COLOR = "#ff9f1c"
 EDIT_COLOR = "#3fa7ff"                             # border tint while a tool is active
+
+# ---- configuration ----------------------------------------------------------
+# ~/.config/snip-pin/config: `key = value` lines, `#` comments, and the
+# sections [keys] and [mouse] for bindings. An environment variable
+# SNIP_PIN_<KEY> overrides a top-level key. The viewer is one long-lived
+# process for every pin, so the file is re-read whenever a pin is opened and a
+# change applies to the next pin without a restart.
+CONFIG_PATH = os.environ.get("SNIP_PIN_CONFIG") or os.path.join(
+    os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"), "snip-pin", "config")
+
+
+def parse_config(text):
+    """{"": {...}, "keys": {...}, "mouse": {...}}: sections of lower-case key -> value."""
+    out, section = {"": {}}, ""
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        head = re.split(r"\s#", line, 1)[0].strip()
+        if head.startswith("[") and head.endswith("]"):
+            section = head[1:-1].strip().lower()
+            out.setdefault(section, {})
+            continue
+        if "=" not in line:
+            continue
+        key, val = (s.strip() for s in line.split("=", 1))
+        # a trailing comment is a `#` after a blank with a value before it, so
+        # `border = #ff9f1c  # orange` keeps the colour and drops the note
+        val = re.split(r"\s#", val, 1)[0].strip()
+        if val == "#" or val.startswith("# "):
+            val = ""
+        if key and key.replace("_", "a").isalnum():
+            out[section][key.lower()] = val
+    return out
+
+
+class Config:
+    def __init__(self, path=CONFIG_PATH):
+        self.path = path
+        self.stamp = None
+        self.data = {"": {}}
+        self.reload()
+
+    def reload(self):
+        """Re-read the file if it changed; True when the settings may differ."""
+        try:
+            st = os.stat(self.path)
+            stamp = (st.st_mtime_ns, st.st_size)
+        except OSError:
+            stamp = None
+        if stamp == self.stamp:
+            return False
+        self.stamp = stamp
+        data = {"": {}}
+        if stamp is not None:
+            try:
+                with open(self.path, encoding="utf-8", errors="replace") as f:
+                    data = parse_config(f.read())
+            except OSError:
+                pass
+        self.data = data
+        return True
+
+    def get(self, key, default=""):
+        """A top-level setting: the environment first, then the file, then the default."""
+        env = os.environ.get("SNIP_PIN_" + key.upper())
+        if env is not None:
+            return env
+        return self.data[""].get(key, default)
+
+    def section(self, name):
+        return self.data.get(name, {})
+
+
+CFG = Config()
+
+
+def border_color():
+    c = CFG.get("border", DEFAULT_BORDER_COLOR).strip()
+    if len(c) in (7, 9) and c.startswith("#") and all(ch in "0123456789abcdefABCDEF" for ch in c[1:]):
+        return c
+    return DEFAULT_BORDER_COLOR
 
 # ---- annotation presets --------------------------------------------------
 COLORS = [("red", "#e5312b"), ("orange", "#ff8c1a"), ("yellow", "#ffd21f"),
@@ -96,7 +179,6 @@ TOOLS = [("rect", "R", "Rect", "Rectangle outline"), ("ellipse", "E", "Ellipse",
          ("marker", "M", "Mark", "Highlighter"), ("blur", "B", "Blur", "Mosaic (hide secrets)"),
          ("crop", "C", "Crop", "Crop: drag, Enter applies, Esc cancels")]
 CLICK_TOOLS = ("text", "counter")                  # placed with a click, not a drag
-TOOL_KEYS = {k.lower(): t for t, k, _, _ in TOOLS}
 MARKER_ALPHA = 0.4
 MARKER_FACTOR = 3.5                                # marker stroke = width * factor
 TEXT_PX = {2: 16, 4: 22, 7: 30}                    # font size per stroke width
@@ -106,10 +188,11 @@ TOOLBAR_HIDE_MS = 300                              # grace period after the poin
 SMOOTH_STEP = 30.0                                 # touchpad scroll units per zoom/opacity step
 OSD_MS = 700                                       # how long the zoom / opacity readout stays
 
-CSS = f"""
+def build_css(border):
+    return f"""
 window.snip-pin {{
     background: transparent;
-    border: {BORDER}px solid {BORDER_COLOR};
+    border: {BORDER}px solid {border};
     box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.45);   /* dark inner line for light pages */
 }}
 window.snip-pin.editing {{ border-color: {EDIT_COLOR}; }}
@@ -119,6 +202,123 @@ window.snip-pin.editing {{ border-color: {EDIT_COLOR}; }}
 .snip-toolbar .swatch.sel {{ box-shadow: 0 0 0 2px {EDIT_COLOR}; }}
 """ + "".join(f".snip-toolbar .swatch.c{i} {{ background: {hexc}; }}\n"
               for i, (_, hexc) in enumerate(COLORS))
+
+
+# ---- key and mouse bindings -----------------------------------------------
+# Every keyboard action with its default binding; [keys] in the config file
+# overrides an entry ("copy = ctrl+shift+c"), several bindings are separated
+# by spaces, an empty value unbinds. Colours stay on the digits.
+ACTIONS = {
+    "copy": "ctrl+c", "save": "ctrl+s", "close": "", "cancel": "Escape", "confirm": "Return KP_Enter",
+    "undo": "ctrl+z", "redo": "ctrl+shift+z ctrl+y",
+    "reset_zoom": "ctrl+0", "reset_opacity": "ctrl+1",
+    "width_down": "bracketleft", "width_up": "bracketright", "menu": "F10",
+}
+ACTIONS.update({f"tool_{tool}": key.lower() for tool, key, _, _ in TOOLS})
+ACTIONS.update({f"color_{i + 1}": str(i + 1) for i in range(len(COLORS))})
+# what the mouse does; [mouse] in the config file overrides ("right = menu")
+MOUSE_DEFAULTS = {"right": "copy", "double": "copy", "middle": "menu"}
+MOUSE_ACTIONS = ("copy", "save", "close", "menu", "reset_zoom", "none")
+MOD_NAMES = {"ctrl": "CONTROL_MASK", "control": "CONTROL_MASK", "shift": "SHIFT_MASK",
+             "alt": "ALT_MASK", "super": "SUPER_MASK", "win": "SUPER_MASK", "meta": "META_MASK"}
+KEY_ALIASES = {"esc": "Escape", "enter": "Return", "del": "Delete", "[": "bracketleft", "]": "bracketright",
+               "+": "plus", "-": "minus", "=": "equal", ",": "comma", ".": "period", "space": "space",
+               "tab": "Tab", "backspace": "BackSpace", "pgup": "Page_Up", "pgdn": "Page_Down"}
+
+
+def parse_binding(spec):
+    """'ctrl+shift+z' -> (lower keyval, modifier mask), or None for an unknown key."""
+    s = spec.strip()
+    if not s:
+        return None
+    parts = s[:-1].split("+") + ["plus"] if s.endswith("+") else s.split("+")   # "ctrl++" binds Ctrl and +
+    parts = [p for p in parts if p]
+    mods = 0
+    for p in parts[:-1]:
+        name = MOD_NAMES.get(p.lower())
+        if name is None:
+            return None
+        mods |= int(getattr(Gdk.ModifierType, name))
+    key = parts[-1]
+    key = KEY_ALIASES.get(key.lower(), key)
+    keyval = 0
+    if len(key) == 1:
+        keyval = Gdk.unicode_to_keyval(ord(key))
+    else:
+        segs = key.split("_")
+        for variant in (key, key.capitalize(), key.upper(), "_".join(s.capitalize() for s in segs),
+                        "_".join([segs[0].upper()] + [s.capitalize() for s in segs[1:]])):   # Page_Up, KP_Enter
+            keyval = Gdk.keyval_from_name(variant)
+            if keyval not in (0, Gdk.KEY_VoidSymbol):
+                break
+    if keyval in (0, Gdk.KEY_VoidSymbol):
+        return None
+    return Gdk.keyval_to_lower(keyval), mods
+
+
+MOD_MASK = int(Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.SHIFT_MASK
+               | Gdk.ModifierType.ALT_MASK | Gdk.ModifierType.SUPER_MASK | Gdk.ModifierType.META_MASK)
+
+
+def build_keymap(overrides):
+    """{(keyval, mods): action} from the defaults and the [keys] section; bad specs are reported and skipped."""
+    keymap = {}
+    for action, default in ACTIONS.items():
+        spec = overrides.get(action, default) if action in overrides else default
+        for one in spec.split():
+            b = parse_binding(one)
+            if b is None:
+                print(f"pin-view: config [keys] {action} = {one}: unknown key", file=sys.stderr)
+                continue
+            keymap[b] = action
+    for action in overrides:
+        if action not in ACTIONS:
+            print(f"pin-view: config [keys] {action}: unknown action", file=sys.stderr)
+    return keymap
+
+
+def build_mouse(overrides):
+    mouse = dict(MOUSE_DEFAULTS)
+    for button, action in overrides.items():
+        if button in mouse and action in MOUSE_ACTIONS:
+            mouse[button] = action
+        else:
+            print(f"pin-view: config [mouse] {button} = {action}: unknown button or action", file=sys.stderr)
+    return mouse
+
+
+def key_label(action):
+    """The first binding of an action as shown in menus and tooltips: 'Ctrl+Shift+Z'."""
+    for (keyval, mods), name in KEYMAP.items():
+        if name != action:
+            continue
+        mt = Gdk.ModifierType
+        parts = [label for mask, label in ((mt.CONTROL_MASK, "Ctrl"), (mt.SHIFT_MASK, "Shift"),
+                                           (mt.ALT_MASK, "Alt"), (mt.SUPER_MASK, "Super")) if mods & int(mask)]
+        key = Gdk.keyval_name(keyval) or "?"
+        key = {"Escape": "Esc", "bracketleft": "[", "bracketright": "]", "Return": "Enter"}.get(key, key)
+        return "+".join(parts + [key.upper() if len(key) == 1 else key])
+    return ""
+
+
+KEYMAP = build_keymap(CFG.section("keys"))
+MOUSE = build_mouse(CFG.section("mouse"))
+_css = None
+
+
+def apply_config(force=False):
+    """Re-read the config file; refresh the CSS, the key map and the mouse map when it changed."""
+    global KEYMAP, MOUSE, _css
+    if not CFG.reload() and not force:
+        return
+    KEYMAP = build_keymap(CFG.section("keys"))
+    MOUSE = build_mouse(CFG.section("mouse"))
+    if _css is None:
+        _css = Gtk.CssProvider()
+        Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), _css,
+                                                  Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+    _css.load_from_string(build_css(border_color()))
+
 
 def hex_to_rgb(h):
     return tuple(int(h[i:i + 2], 16) / 255 for i in (1, 3, 5))
@@ -242,8 +442,8 @@ def unique_path(folder, stem, ext):
     return p
 
 def screenshot_folder():
-    """Where Ctrl+S saves: $SNIP_PIN_SAVE_DIR, the ML4W setting, the XDG pictures dir, ~/Pictures."""
-    d = os.environ.get("SNIP_PIN_SAVE_DIR", "").strip()
+    """Where Ctrl+S saves: save_dir ($SNIP_PIN_SAVE_DIR), the ML4W setting, the XDG pictures dir, ~/Pictures."""
+    d = CFG.get("save_dir", "").strip()
     if d:
         return os.path.expandvars(os.path.expanduser(d))
     try:
@@ -415,7 +615,6 @@ def render_png(pixbuf, ops, out_path):
     surf.write_to_png(out_path)
     return out_path
 
-_css_loaded = False
 _seq = 0
 
 
@@ -467,13 +666,7 @@ class Pin(Gtk.ApplicationWindow):
         self.set_decorated(False)
         self.set_resizable(False)
         self.add_css_class("snip-pin")
-        global _css_loaded
-        if not _css_loaded:
-            css = Gtk.CssProvider()
-            css.load_from_string(CSS)
-            Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), css,
-                                                      Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
-            _css_loaded = True
+        apply_config(force=_css is None)          # first pin: install the CSS; later: pick up edits
 
         self.area = Gtk.DrawingArea()
         self.area.set_draw_func(self.draw)
@@ -495,11 +688,11 @@ class Pin(Gtk.ApplicationWindow):
         self.area.add_controller(click)
 
         rclick = Gtk.GestureClick(button=3)
-        rclick.connect("pressed", lambda g, n, x, y: self.copy())
+        rclick.connect("pressed", lambda g, n, x, y: self.mouse_action("right", x, y))
         self.area.add_controller(rclick)
 
         mclick = Gtk.GestureClick(button=2)
-        mclick.connect("pressed", self.on_menu)
+        mclick.connect("pressed", lambda g, n, x, y: self.mouse_action("middle", x, y))
         self.area.add_controller(mclick)
 
         scroll = Gtk.EventControllerScroll(flags=Gtk.EventControllerScrollFlags.VERTICAL)
@@ -531,11 +724,9 @@ class Pin(Gtk.ApplicationWindow):
         self.menu = Gtk.PopoverMenu.new_from_model(self.build_menu())
         self.menu.set_parent(self.area)
         self.menu.set_has_arrow(False)
-        for name, cb in (("copy", self.copy), ("save", self.save),
-                         ("reset", lambda *a: self.set_scale(self.base_scale)), ("close", lambda *a: self.close()),
-                         ("undo", lambda *a: self.undo()), ("redo", lambda *a: self.redo())):
+        for name in ("copy", "save", "reset_zoom", "close", "undo", "redo"):
             act = Gio.SimpleAction.new(name, None)
-            act.connect("activate", cb)
+            act.connect("activate", lambda *a, name=name: self.run_action(name))
             self.add_action(act)
 
     # ---- geometry -------------------------------------------------------
@@ -970,7 +1161,7 @@ class Pin(Gtk.ApplicationWindow):
 
     def on_click(self, gesture, n, x, y):
         if n == 2:
-            self.copy()
+            self.mouse_action("double", x, y)
         elif self.tool == "text":
             self.commit_text()
             self.start_text(self.to_img(x, y))
@@ -986,9 +1177,60 @@ class Pin(Gtk.ApplicationWindow):
             open_pin(self.get_application(), [p])        # a non-image gets the "Cannot open" toast
         return bool(paths)
 
-    def on_menu(self, gesture, n, x, y):
+    def on_menu(self, x=None, y=None):
+        if x is None:
+            x, y = self.area.get_width() / 2, self.area.get_height() / 2
         self.menu.set_pointing_to(Gdk.Rectangle(x=int(x), y=int(y), width=1, height=1))
         self.menu.popup()
+
+    def mouse_action(self, button, x, y):
+        """Run what the [mouse] section assigns to right / double / middle."""
+        self.run_action(MOUSE.get(button, "none"), x, y)
+
+    def run_action(self, action, x=None, y=None):
+        """Dispatch a named action (see ACTIONS and MOUSE_ACTIONS); False if unknown."""
+        if action == "copy":
+            self.copy()
+        elif action == "save":
+            self.save()
+        elif action == "close":
+            self.close()
+        elif action == "menu":
+            self.on_menu(x, y)
+        elif action == "undo":
+            self.undo()
+        elif action == "redo":
+            self.redo()
+        elif action == "reset_zoom":
+            self.set_scale(self.base_scale); self.show_osd("100 %")
+        elif action == "reset_opacity":
+            self.opacity = 1.0; self.set_opacity(1.0); self.show_osd("100 %")
+        elif action == "width_down":
+            self.set_width(self.width_idx - 1)
+        elif action == "width_up":
+            self.set_width(self.width_idx + 1)
+        elif action == "cancel":
+            if self.crop_pending is not None:
+                self.crop_pending = None; self.sync_toolbar(); self.area.queue_draw()
+            elif self.tool is not None:
+                self.set_tool(None)
+            else:
+                self.close()
+        elif action == "confirm":
+            if self.crop_pending is not None:
+                self.apply_crop()
+            else:
+                return False
+        elif action.startswith("tool_"):
+            tool = action[5:]
+            self.set_tool(None if tool == self.tool else tool)
+        elif action.startswith("color_"):
+            self.set_color(int(action[6:]) - 1)
+        elif action == "none":
+            pass
+        else:
+            return False
+        return True
 
     def on_scroll(self, ctrl, dx, dy):
         # A wheel notch is one step. A touchpad sends many small smooth events
@@ -1008,77 +1250,44 @@ class Pin(Gtk.ApplicationWindow):
         return True
 
     def on_key(self, ctrl, keyval, keycode, state):
-        ctrl_held = state & Gdk.ModifierType.CONTROL_MASK
-        shift = state & Gdk.ModifierType.SHIFT_MASK
+        mods = int(state) & MOD_MASK
+        action = KEYMAP.get((Gdk.keyval_to_lower(keyval), mods))
         # text entry: the input method first (dead keys, Compose, CJK), then
         # the editing keys; everything else is swallowed while typing
         if self.typing is not None:
             event = ctrl.get_current_event()
             if event is not None and self.im.filter_keypress(event):
                 return True
+            ctrl_held = mods & int(Gdk.ModifierType.CONTROL_MASK)
             if ctrl_held and keyval in (Gdk.KEY_v, Gdk.KEY_V):
                 self.paste_text(); return True
-            if ctrl_held:
-                pass                                      # Ctrl+C, Ctrl+S, Ctrl+Z ... below
-            elif keyval == Gdk.KEY_Escape:
+            if action in ("cancel", "close"):
                 self.cancel_text(); return True
-            elif keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter):
+            if action == "confirm":
                 self.commit_text(); return True
-            elif keyval == Gdk.KEY_BackSpace:
+            if keyval == Gdk.KEY_BackSpace:
                 self.typing["text"] = self.typing["text"][:-1]; self.area.queue_draw(); return True
-            else:
+            if not ctrl_held:                             # Ctrl+C, Ctrl+S, Ctrl+Z ... fall through
                 u = Gdk.keyval_to_unicode(keyval)         # fallback when no IM consumed the key
                 if u and chr(u).isprintable():
                     self.typing["text"] += chr(u); self.area.queue_draw()
                 return True
-        if keyval == Gdk.KEY_Escape:
-            if self.crop_pending is not None:
-                self.crop_pending = None; self.sync_toolbar(); self.area.queue_draw()
-            elif self.tool is not None:
-                self.set_tool(None)
-            else:
-                self.close()
-            return True
-        if keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter) and self.crop_pending is not None:
-            self.apply_crop(); return True
-        if ctrl_held:
-            if keyval in (Gdk.KEY_c, Gdk.KEY_C):
-                self.copy(); return True
-            if keyval in (Gdk.KEY_s, Gdk.KEY_S):
-                self.save(); return True
-            if keyval in (Gdk.KEY_z, Gdk.KEY_Z):
-                self.redo() if shift else self.undo(); return True
-            if keyval in (Gdk.KEY_y, Gdk.KEY_Y):
-                self.redo(); return True
-            if keyval == Gdk.KEY_0:
-                self.set_scale(self.base_scale); self.show_osd("100 %"); return True
-            if keyval == Gdk.KEY_1:
-                self.opacity = 1.0; self.set_opacity(1.0); self.show_osd("100 %"); return True
+        if action is None:
             return False
-        name = Gdk.keyval_name(keyval) or ""
-        if name.lower() in TOOL_KEYS:
-            tool = TOOL_KEYS[name.lower()]
-            self.set_tool(None if tool == self.tool else tool); return True
-        if name.isdigit() and 1 <= int(name) <= len(COLORS):
-            self.set_color(int(name) - 1); return True
-        if keyval == Gdk.KEY_bracketleft:
-            self.set_width(self.width_idx - 1); return True
-        if keyval == Gdk.KEY_bracketright:
-            self.set_width(self.width_idx + 1); return True
-        return False
+        return self.run_action(action)
 
     # ---- actions ----------------------------------------------------------
     def build_menu(self):
         m = Gio.Menu()
-        m.append("Copy image & close\tCtrl+C", "win.copy")
-        m.append("Save to screenshots & close\tCtrl+S", "win.save")
+        m.append(f"Copy image & close\t{key_label('copy')}", "win.copy")
+        m.append(f"Save to screenshots & close\t{key_label('save')}", "win.save")
         edit = Gio.Menu()
-        edit.append("Undo\tCtrl+Z", "win.undo")
-        edit.append("Redo\tCtrl+Shift+Z", "win.redo")
+        edit.append(f"Undo\t{key_label('undo')}", "win.undo")
+        edit.append(f"Redo\t{key_label('redo')}", "win.redo")
         m.append_section(None, edit)
         tail = Gio.Menu()
-        tail.append("Reset zoom\tCtrl+0", "win.reset")
-        tail.append("Close\tEsc", "win.close")
+        tail.append(f"Reset zoom\t{key_label('reset_zoom')}", "win.reset_zoom")
+        tail.append(f"Close\t{key_label('cancel')}", "win.close")
         m.append_section(None, tail)
         return m
 

@@ -304,3 +304,78 @@ def test_render_skips_crop_markers(tmp_path, view):
     marker = {"kind": "crop", "pts": [], "color": (0, 0, 0), "width": 2, "text": ""}
     view.render_png(pb, [marker], str(tmp_path / "o.png"))
     assert png_size(str(tmp_path / "o.png")) == (40, 40)
+
+
+def test_parse_config_sections_and_comments(view):
+    text = ("# c\nkeep_days = 3 # x\nborder=#fff\nsave_dir = #123456  # orange\nempty = # nothing here\n"
+            "[keys]  # bindings\ncopy = ctrl+c ctrl+shift+c\n[Mouse]\nright = menu\nnoequals\n")
+    cfg = view.parse_config(text)
+    assert cfg[""] == {"keep_days": "3", "border": "#fff", "save_dir": "#123456", "empty": ""}
+    assert cfg["keys"] == {"copy": "ctrl+c ctrl+shift+c"}
+    assert cfg["mouse"] == {"right": "menu"}
+
+
+def test_config_env_overrides_file_and_reload_tracks_changes(tmp_path, view, monkeypatch):
+    path = tmp_path / "config"
+    path.write_text("border = #123456\n")
+    cfg = view.Config(str(path))
+    assert cfg.get("border") == "#123456"
+    monkeypatch.setenv("SNIP_PIN_BORDER", "#abcdef")
+    assert cfg.get("border") == "#abcdef"
+    monkeypatch.delenv("SNIP_PIN_BORDER")
+    assert cfg.reload() is False
+    path.write_text("border = #654321\n[keys]\ncopy = ctrl+shift+c\n")
+    os.utime(path, (1, 1))                                  # any change of mtime or size counts
+    assert cfg.reload() is True
+    assert cfg.get("border") == "#654321" and cfg.section("keys") == {"copy": "ctrl+shift+c"}
+    path.unlink()
+    assert cfg.reload() is True and cfg.get("border", "dflt") == "dflt"
+
+
+def test_parse_binding(view):
+    from gi.repository import Gdk
+    ctrl, shift = int(Gdk.ModifierType.CONTROL_MASK), int(Gdk.ModifierType.SHIFT_MASK)
+    assert view.parse_binding("ctrl+c") == (Gdk.KEY_c, ctrl)
+    assert view.parse_binding("Ctrl+Shift+Z") == (Gdk.KEY_z, ctrl | shift)
+    assert view.parse_binding("Escape") == (Gdk.KEY_Escape, 0)
+    assert view.parse_binding("esc") == (Gdk.KEY_Escape, 0)
+    assert view.parse_binding("[") == (Gdk.KEY_bracketleft, 0)
+    assert view.parse_binding("ctrl++") == (Gdk.KEY_plus, ctrl)
+    assert view.parse_binding("f10") == (Gdk.KEY_F10, 0)
+    assert view.parse_binding("kp_enter") == (Gdk.KEY_KP_Enter, 0)
+    assert view.parse_binding("hyper+c") is None
+    assert view.parse_binding("ctrl+nosuchkey") is None
+    assert view.parse_binding("") is None
+
+
+def test_default_keymap_has_no_conflicts_and_overrides_apply(view, capsys):
+    from gi.repository import Gdk
+    km = view.build_keymap({})
+    assert km[(Gdk.KEY_c, int(Gdk.ModifierType.CONTROL_MASK))] == "copy"
+    assert km[(Gdk.KEY_r, 0)] == "tool_rect" and km[(Gdk.KEY_3, 0)] == "color_3"
+    assert km[(Gdk.KEY_Escape, 0)] == "cancel"
+    # every default binding is parseable and maps to exactly one action
+    n = sum(len(v.split()) for v in view.ACTIONS.values())
+    assert len(km) == n
+    km = view.build_keymap({"copy": "ctrl+shift+c", "redo": "", "bogus": "x", "save": "ctrl+nosuch"})
+    assert km[(Gdk.KEY_c, int(Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.SHIFT_MASK))] == "copy"
+    assert (Gdk.KEY_c, int(Gdk.ModifierType.CONTROL_MASK)) not in km
+    assert "redo" not in km.values() and "save" not in km.values()
+    err = capsys.readouterr().err
+    assert "bogus" in err and "nosuch" in err
+
+
+def test_mouse_map_defaults_and_overrides(view, capsys):
+    assert view.build_mouse({}) == {"right": "copy", "double": "copy", "middle": "menu"}
+    m = view.build_mouse({"right": "menu", "double": "close", "middle": "bogus", "left": "copy"})
+    assert m == {"right": "menu", "double": "close", "middle": "menu"}
+    assert "bogus" in capsys.readouterr().err
+
+
+def test_key_label(view, monkeypatch):
+    monkeypatch.setattr(view, "KEYMAP", view.build_keymap({}))
+    assert view.key_label("copy") == "Ctrl+C"
+    assert view.key_label("redo") in ("Ctrl+Shift+Z", "Ctrl+Y")
+    assert view.key_label("cancel") == "Esc"
+    assert view.key_label("width_down") == "["
+    assert view.key_label("close") == ""

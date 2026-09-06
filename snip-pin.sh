@@ -18,13 +18,16 @@
 #   snip-pin.sh clear      empty the history (kept snips stay)
 #   snip-pin.sh abort      end the selection this script started (right-click bind)
 #   snip-pin.sh doctor     check the dependencies (exit 1 if a required one is missing)
+#   snip-pin.sh config     print the effective settings and where each comes from
 #   snip-pin.sh --version  print the version
-# Pressing the snip key twice within SNIP_PIN_TAP_MS (default 300) aborts the
+# Pressing the snip key twice within tap_ms (default 300) aborts the
 # selection the first press started and opens the history instead.
-# Snips are kept in ~/.cache/snip-pin for SNIP_PIN_KEEP_DAYS days (default 7,
+# Snips are kept in ~/.cache/snip-pin for keep_days days (default 7,
 # 0 = keep forever); snips marked as kept in the picker live in the kept/
 # subfolder and never expire. The file name carries the capture position
 # (_x<X>_y<Y>), so `last` re-pins a snip where it was taken.
+# Settings live in ~/.config/snip-pin/config (key = value lines, see the
+# README); an environment variable SNIP_PIN_<KEY> overrides the file.
 # Testing hooks: SNIP_GEOM=WxH+X+Y skips the interactive selection,
 # SNIP_NO_ELEMENTS=1 disables element snapping.
 
@@ -33,10 +36,37 @@ HERE=$(dirname "$(readlink -f "$0")")
 VIEWER="${SNIP_PIN_VIEWER:-$HERE/pin-view.py}"       # override: tests
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/snip-pin"
 STATE="${XDG_RUNTIME_DIR:-/tmp}/snip-pin"
+CONFIG="${SNIP_PIN_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/snip-pin/config}"
 SNIP_GEOM="${SNIP_GEOM:-}"
 SNIP_NO_ELEMENTS="${SNIP_NO_ELEMENTS:-}"
 
-# integer settings from the environment; anything else falls back to the default
+# Settings: the config file fills in whatever the environment does not set.
+# Only the top-level `key = value` lines are for this script; the [keys] and
+# [mouse] sections belong to the viewer, which reads the file itself. Lines
+# are parsed, never sourced, so a stray `$(...)` in the file runs nothing.
+declare -A FROM_FILE=()
+load_config() {
+    local line key val section=''
+    [[ -r "$CONFIG" ]] || return 0
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        line="${line#"${line%%[![:space:]]*}"}"         # leading blanks
+        [[ -z "$line" || "$line" == \#* ]] && continue    # blank or comment line
+        if [[ "${line%%[[:space:]]#*}" =~ ^\[([a-z_]+)\][[:space:]]*$ ]]; then section=${BASH_REMATCH[1]}; continue; fi
+        [[ -n "$section" ]] && continue
+        [[ "$line" =~ ^([a-z][a-z0-9_]*)[[:space:]]*=[[:space:]]*(.*)$ ]] || continue
+        key=${BASH_REMATCH[1]^^}; val=${BASH_REMATCH[2]}
+        # a trailing comment is a `#` after a blank with a value before it, so
+        # `border = #ff9f1c  # orange` keeps the colour and drops the note
+        val="${val%%[[:space:]]#*}"; val="${val%"${val##*[![:space:]]}"}"
+        [[ "$val" == "#" || "$val" == "# "* ]] && val=""
+        [[ "$key" == ELEMENTS_BUDGET_MS ]] && key=SNIP_ELEMENTS_BUDGET_MS || key="SNIP_PIN_$key"
+        FROM_FILE[$key]=$val
+        [[ -z "${!key+x}" ]] && export "$key=$val"
+    done < "$CONFIG"
+}
+load_config
+
+# integer settings; anything else falls back to the default
 int_or() { if [[ "${!1:-}" =~ ^[0-9]+$ ]]; then echo "${!1}"; else echo "$2"; fi; }
 KEEP=$(int_or SNIP_PIN_KEEP_DAYS 7)
 TAP_MS=$(int_or SNIP_PIN_TAP_MS 300)
@@ -172,9 +202,27 @@ PY
         fi
         [[ $missing -eq 0 ]] && echo "all required tools found" || echo "required tools missing" >&2
         exit $missing ;;
+    config)
+        # every setting with its effective value and where it comes from
+        if [[ -r "$CONFIG" ]]; then echo "config file: $CONFIG"; else echo "config file: $CONFIG (not found, defaults)"; fi
+        show() {   # key, default
+            local var=SNIP_PIN_${1^^} src val
+            [[ "$1" == elements_budget_ms ]] && var=SNIP_ELEMENTS_BUDGET_MS
+            if [[ -n "${!var+x}" && -n "${FROM_FILE[$var]+x}" && "${!var}" == "${FROM_FILE[$var]}" ]]; then src="file"
+            elif [[ -n "${!var+x}" ]]; then src="environment"
+            else src="default"; fi
+            val="${!var-$2}"
+            printf '  %-20s = %-28s (%s)\n' "$1" "${val:-<unset>}" "$src"
+        }
+        show keep_days 7
+        show tap_ms 300
+        show border '#ff9f1c'
+        show save_dir ''
+        show elements_budget_ms 150
+        exit 0 ;;
     --version|-V)
         cat "$HERE/VERSION"; exit 0 ;;
-    *)  echo "usage: snip-pin.sh [last|history|clipboard|pin FILE|clear|doctor|--version]" >&2
+    *)  echo "usage: snip-pin.sh [last|history|clipboard|pin FILE|clear|doctor|config|--version]" >&2
         echo "  (no argument: select a region, capture it, pin it)" >&2; exit 2 ;;
 esac
 
